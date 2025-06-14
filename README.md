@@ -8,7 +8,7 @@ This add-on enables you to relay print jobs from mobile devices to network print
 2. Click the 3-dots menu in the top right -> **Repositories**
 3. Add this repository URL:
    ```
-   https://github.com/yourusername/ha-printer-relay
+   https://github.com/samuelmukoti/ha-printer-relay
    ```
 4. The "Printer Relay" add-on should now be available for installation
 
@@ -29,7 +29,7 @@ Configure your mobile app with:
 
 ## Support
 
-For issues and feature requests, please use the [GitHub issue tracker](https://github.com/yourusername/ha-printer-relay/issues).
+For issues and feature requests, please use the [GitHub issue tracker](https://github.com/samuelmukoti/ha-printer-relay/issues).
 
 # RelayPrint - Home Assistant Printer Server Add-on
 
@@ -49,7 +49,7 @@ A Home Assistant add-on that replaces Google Cloud Print functionality by provid
 
 1. Add our repository to your Home Assistant instance:
    ```
-   https://github.com/yourusername/ha-printer-relay
+   https://github.com/samuelmukoti/ha-printer-relay
    ```
 
 2. Search for "RelayPrint" in the Add-on store

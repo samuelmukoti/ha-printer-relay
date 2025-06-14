@@ -1,4 +1,4 @@
 # https://developers.home-assistant.io/docs/add-ons/repository#repository-configuration
 name: Printer Relay Add-on Repository
-url: https://github.com/yourusername/ha-printer-relay
-maintainer: Your Name <your@email.com>
+url: https://github.com/samuelmukoti/ha-printer-relay
+maintainer: Samuel Mukoti <samuelmukoti@gmail.com>
