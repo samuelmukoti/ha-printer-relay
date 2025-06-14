@@ -1,16 +1,36 @@
-FROM python:3.11-slim
+FROM python:3.11-alpine
 
-WORKDIR /app
+# Install required packages
+RUN apk add --no-cache \
+    cups \
+    cups-filters \
+    cups-pdf \
+    avahi \
+    dbus \
+    bash \
+    curl
+
+# Install Python dependencies
+COPY tests/requirements.txt /tmp/
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+# Create necessary directories
+RUN mkdir -p /data/cups /data/print_jobs
+
+# Copy application files
+COPY rootfs /
+COPY run.sh /
+RUN chmod a+x /run.sh
 
 # Copy test files
-COPY tests/ /app/tests/
+COPY tests/test_data /data/test_data
+COPY tests/integration /tests/integration
 
-# Copy configuration files that are tested
-COPY config.json /app/
-COPY config.yaml /app/
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV API_SECRET=test-secret
+ENV TOKEN_EXPIRY=3600
 
-# Install test dependencies
-RUN pip install -r tests/requirements.txt
+EXPOSE 631 8080
 
-# Run tests
-CMD ["python3", "-m", "pytest", "tests/test_config.py", "-v", "--cov=.", "--cov-report=term-missing"] 
+CMD ["/run.sh"] 

@@ -1,3 +1,36 @@
+# Home Assistant Printer Relay Add-on
+
+This add-on enables you to relay print jobs from mobile devices to network printers through your Home Assistant instance.
+
+## Installation
+
+1. Navigate in your Home Assistant frontend to **Settings** -> **Add-ons** -> **Add-on Store**
+2. Click the 3-dots menu in the top right -> **Repositories**
+3. Add this repository URL:
+   ```
+   https://github.com/yourusername/ha-printer-relay
+   ```
+4. The "Printer Relay" add-on should now be available for installation
+
+## Configuration
+
+After installation:
+
+1. Set your `api_secret` in the add-on configuration
+2. Configure the `token_expiry` if needed (default: 3600 seconds)
+3. Start the add-on
+
+## Mobile App Setup
+
+Configure your mobile app with:
+- Home Assistant URL
+- The API secret you configured
+- The printer relay endpoint (usually `http://your-ha-instance:8080`)
+
+## Support
+
+For issues and feature requests, please use the [GitHub issue tracker](https://github.com/yourusername/ha-printer-relay/issues).
+
 # RelayPrint - Home Assistant Printer Server Add-on
 
 A Home Assistant add-on that replaces Google Cloud Print functionality by providing local and remote printing capabilities through CUPS and Avahi.
