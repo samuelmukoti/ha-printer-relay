@@ -27,6 +27,10 @@ Configure your mobile app with:
 - The API secret you configured
 - The printer relay endpoint (usually `http://your-ha-instance:8080`)
 
+## Development
+
+For development instructions, please see [DEVELOPMENT.md](docs/DEVELOPMENT.md).
+
 ## Support
 
 For issues and feature requests, please use the [GitHub issue tracker](https://github.com/samuelmukoti/ha-printer-relay/issues).
