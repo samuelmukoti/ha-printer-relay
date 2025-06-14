@@ -15,9 +15,30 @@
     - `avahi/run` - Avahi service script
   - `rootfs/etc/avahi/` - Avahi configuration
     - `avahi-daemon.conf` - Avahi daemon configuration
+  - `rootfs/etc/nginx/` - Nginx configuration
+    - `nginx.conf` - Nginx configuration for CUPS web interface ingress
+  - `rootfs/etc/cups/` - CUPS configuration
+    - `cupsd.conf` - CUPS server configuration with ingress support
+  - `rootfs/usr/local/bin/` - Custom scripts
+    - `printer_discovery.py` - Printer discovery and management script
+    - `job_queue_manager.py` - Print job queue management and monitoring
 - `tests/` - Test files
   - `test_addon.sh` - Automated test script
+  - `test_data/` - Test data and configurations
+    - `cupsd-test.conf` - CUPS test configuration
+    - `test_print.pdf` - Test PDF file for print tests
+    - `avahi-test.conf` - Avahi test configuration
   - `MANUAL_TESTS.md` - Manual testing checklist
+  - `test_config.py` - Unit tests for configuration validation
+  - `test_printer_discovery.py` - Unit tests for printer discovery
+  - `test_job_queue.py` - Unit tests for job queue management
+  - `test_cups_integration.py` - Integration tests for CUPS functionality
+  - `test_avahi_integration.py` - Integration tests for Avahi advertisement
+  - `requirements.txt` - Test dependencies
+  - `run_tests.sh` - Test runner script
+  - `Dockerfile.test` - Docker configuration for testing
+- `docs/` - Documentation files
+  - `printer-setup.md` - Comprehensive printer setup guide
 - `run.sh` - Main entry point script
 - `apparmor.txt` - AppArmor profile for secure port and device access
 - `rootfs/` - Directory containing service configurations
@@ -25,6 +46,7 @@
   - `rootfs/etc/avahi/services/` - Avahi service definitions
 - `repository.yaml` - Repository information
 - `README.md` - Add-on documentation
+- `CONTRIBUTING.md` - Contribution guidelines
 - `LICENSE` - Project license
 - `addon/` - Directory containing the Home Assistant add-on code
   - `Dockerfile` - Container definition for the RelayPrint add-on
@@ -56,7 +78,7 @@
 
 ## Tasks
 
-- [ ] 1.0 Set up Home Assistant Add-on Infrastructure
+- [x] 1.0 Set up Home Assistant Add-on Infrastructure
   - [x] 1.1 Create basic add-on structure with config.yaml and Dockerfile
   - [x] 1.2 Set up Home Assistant official multi-arch base images with required dependencies
   - [x] 1.3 Configure add-on ports (631 for CUPS, 5353 for mDNS) and security profiles
@@ -64,20 +86,20 @@
   - [x] 1.5 Create persistent storage for CUPS configuration with secure defaults
   - [x] 1.6 Write startup script (run.sh) with proper service initialization
   - [x] 1.7 Test add-on installation and basic functionality
-  - [ ] 1.8 Write unit tests for configuration validation
-  - [ ] 1.9 Document add-on installation and configuration process
+  - [x] 1.8 Write unit tests for configuration validation
+  - [x] 1.9 Document add-on installation and configuration process
 
-- [ ] 2.0 Implement CUPS and Avahi Integration
-  - [ ] 2.1 Configure CUPS server with proper security settings
-  - [ ] 2.2 Set up Avahi daemon for printer advertisement
-  - [ ] 2.3 Configure AirPrint compatibility (DNS-SD records)
-  - [ ] 2.4 Implement printer discovery mechanism
-  - [ ] 2.5 Create printer management interface
-  - [ ] 2.6 Set up job queue management
-  - [ ] 2.7 Configure CUPS web interface for Home Assistant ingress
-  - [ ] 2.8 Write integration tests for CUPS functionality
-  - [ ] 2.9 Write integration tests for Avahi advertisement
-  - [ ] 2.10 Document printer setup process
+- [x] 2.0 Implement CUPS and Avahi Integration
+  - [x] 2.1 Configure CUPS server with proper security settings
+  - [x] 2.2 Set up Avahi daemon for printer advertisement
+  - [x] 2.3 Configure AirPrint compatibility (DNS-SD records)
+  - [x] 2.4 Implement printer discovery mechanism
+  - [x] 2.5 Create printer management interface
+  - [x] 2.6 Set up job queue management
+  - [x] 2.7 Configure CUPS web interface for Home Assistant ingress
+  - [x] 2.8 Write integration tests for CUPS functionality
+  - [x] 2.9 Write integration tests for Avahi advertisement
+  - [x] 2.10 Document printer setup process
 
 - [ ] 3.0 Develop REST API for Print Management
   - [ ] 3.1 Design API endpoints and data structures

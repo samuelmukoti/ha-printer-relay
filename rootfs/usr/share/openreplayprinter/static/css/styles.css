@@ -1,0 +1,269 @@
+:root {
+  /* Home Assistant Colors */
+  --primary-color: #03a9f4;
+  --accent-color: #ff9800;
+  --primary-text-color: #212121;
+  --secondary-text-color: #727272;
+  --text-primary-color: #ffffff;
+  --disabled-text-color: #bdbdbd;
+  --divider-color: rgba(0, 0, 0, .12);
+  --error-color: #db4437;
+  --success-color: #43a047;
+  --warning-color: #ffa600;
+  --info-color: #039be5;
+
+  /* Custom Colors */
+  --card-background-color: #ffffff;
+  --card-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.14),
+                 0 3px 1px -2px rgba(0, 0, 0, 0.12),
+                 0 1px 5px 0 rgba(0, 0, 0, 0.2);
+  --header-height: 64px;
+  --transition-duration: 0.2s;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  color: var(--primary-text-color);
+  background-color: #f5f5f5;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.header {
+  background-color: var(--primary-color);
+  color: var(--text-primary-color);
+  height: var(--header-height);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 400;
+}
+
+.main-content {
+  margin-top: calc(var(--header-height) + 16px);
+  padding-bottom: 32px;
+}
+
+.printer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.printer-card {
+  background: var(--card-background-color);
+  border-radius: 8px;
+  box-shadow: var(--card-shadow);
+  padding: 16px;
+  transition: transform var(--transition-duration);
+}
+
+.printer-card:hover {
+  transform: translateY(-2px);
+}
+
+.printer-card.offline {
+  opacity: 0.7;
+}
+
+.printer-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.printer-icon {
+  width: 40px;
+  height: 40px;
+  margin-right: 12px;
+  color: var(--primary-color);
+}
+
+.printer-info {
+  flex: 1;
+}
+
+.printer-name {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.printer-location {
+  color: var(--secondary-text-color);
+  font-size: 14px;
+}
+
+.printer-status {
+  display: flex;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.status-indicator.online {
+  background-color: var(--success-color);
+}
+
+.status-indicator.offline {
+  background-color: var(--error-color);
+}
+
+.status-indicator.warning {
+  background-color: var(--warning-color);
+}
+
+.printer-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--transition-duration);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-primary {
+  background-color: var(--primary-color);
+  color: var(--text-primary-color);
+}
+
+.btn-primary:hover {
+  background-color: #0288d1;
+}
+
+.btn-secondary {
+  background-color: #f5f5f5;
+  color: var(--primary-text-color);
+}
+
+.btn-secondary:hover {
+  background-color: #e0e0e0;
+}
+
+.printer-details {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--divider-color);
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.detail-label {
+  color: var(--secondary-text-color);
+}
+
+.detail-value {
+  font-weight: 500;
+}
+
+.job-queue {
+  margin-top: 16px;
+}
+
+.job-item {
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  border-radius: 4px;
+  background-color: #f5f5f5;
+  margin-bottom: 8px;
+}
+
+.job-info {
+  flex: 1;
+  margin-left: 8px;
+}
+
+.job-name {
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.job-progress {
+  height: 4px;
+  background-color: var(--divider-color);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.job-progress-bar {
+  height: 100%;
+  background-color: var(--primary-color);
+  transition: width var(--transition-duration);
+}
+
+.floating-action-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background-color: var(--accent-color);
+  color: var(--text-primary-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: transform var(--transition-duration);
+}
+
+.floating-action-btn:hover {
+  transform: scale(1.1);
+}
+
+@media (max-width: 600px) {
+  .printer-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .header {
+    height: 56px;
+  }
+  
+  .main-content {
+    margin-top: calc(56px + 16px);
+  }
+} 

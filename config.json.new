@@ -1,0 +1,49 @@
+{
+  "name": "Open-ReplayPrinter",
+  "version": "0.1.0",
+  "slug": "open_replay_printer",
+  "description": "CUPS print server with remote access via Home Assistant",
+  "url": "https://github.com/yourusername/ha-printer-relay",
+  "arch": ["armhf", "armv7", "aarch64", "amd64", "i386"],
+  "startup": "application",
+  "boot": "auto",
+  "host_network": true,
+  "ingress": true,
+  "ingress_port": 8080,
+  "panel_icon": "mdi:printer",
+  "options": {
+    "cups_admin_user": "admin",
+    "cups_admin_password": "admin",
+    "api_secret": "change-me-in-production",
+    "token_expiry": 86400,
+    "log_level": "info",
+    "allowed_networks": ["192.168.0.0/16", "172.16.0.0/12", "10.0.0.0/8"],
+    "expose_api": false,
+    "expose_cups": false
+  },
+  "schema": {
+    "cups_admin_user": "str",
+    "cups_admin_password": "password",
+    "api_secret": "password",
+    "token_expiry": "int(3600,604800)",
+    "log_level": "list(debug|info|warning|error)",
+    "allowed_networks": ["str"],
+    "expose_api": "bool",
+    "expose_cups": "bool"
+  },
+  "ports": {
+    "631/tcp": null,
+    "8080/tcp": null
+  },
+  "ports_description": {
+    "631/tcp": "CUPS web interface (optional)",
+    "8080/tcp": "Print API (optional)"
+  },
+  "webui": "http://[HOST]:[PORT:8080]",
+  "hassio_api": true,
+  "hassio_role": "default",
+  "auth_api": true,
+  "services": ["mqtt:need"],
+  "map": ["config:rw", "ssl"],
+  "image": "ghcr.io/yourusername/open-replay-printer-{arch}"
+}

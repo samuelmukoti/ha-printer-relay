@@ -1,61 +1,65 @@
-ARG BUILD_FROM
-FROM ${BUILD_FROM}
+FROM ghcr.io/home-assistant/amd64-base:3.18
 
 # Install required packages
-RUN \
-    apk add --no-cache \
-        cups \
-        cups-filters \
-        cups-libs \
-        cups-pdf \
-        cups-client \
-        avahi \
-        avahi-compat-libdns_sd \
-        avahi-tools \
-        dbus \
-        python3 \
-        py3-pip \
-        nginx \
-        openssl \
-        # Required for PDF processing
-        ghostscript \
-        imagemagick \
-        # Required for printer detection
-        udev \
-        eudev \
-        # Required for USB printers
-        usbutils \
-    && pip3 install --no-cache-dir supervisor \
-    && mkdir -p /etc/cups \
-    && mkdir -p /var/log/cups \
-    && mkdir -p /var/spool/cups \
-    && mkdir -p /var/run/dbus \
-    && chmod 755 /var/log/cups \
-    && chmod 710 /etc/cups \
-    && chmod 700 /var/spool/cups
+RUN apk add --no-cache \
+    cups \
+    cups-filters \
+    cups-pdf \
+    avahi \
+    dbus \
+    python3 \
+    py3-pip \
+    nginx \
+    bash
 
-# Copy data
+# Install Python dependencies
+COPY requirements.txt /tmp/
+RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
+
+# Create necessary directories
+RUN mkdir -p /data/cups /data/print_jobs
+
+# Copy configuration files
 COPY rootfs /
 COPY run.sh /
 RUN chmod a+x /run.sh
 
-# Create required directories with proper permissions
-RUN \
-    mkdir -p /data/cups/ssl \
-    && mkdir -p /data/cups/ppd \
-    && mkdir -p /data/cups/interface \
-    && mkdir -p /data/printers \
-    && mkdir -p /data/logs
+# Copy API and application files
+COPY rootfs/usr/local/bin/print_api.py /usr/local/bin/
+COPY rootfs/usr/local/bin/job_queue_manager.py /usr/local/bin/
+COPY rootfs/usr/local/bin/printer_discovery.py /usr/local/bin/
+
+# Set up CUPS
+RUN mkdir -p /etc/cups
+COPY rootfs/etc/cups/cupsd.conf /etc/cups/
+RUN chmod 640 /etc/cups/cupsd.conf
+
+# Set up Avahi
+COPY rootfs/etc/avahi/avahi-daemon.conf /etc/avahi/
+RUN chmod 644 /etc/avahi/avahi-daemon.conf
+
+# Set up Nginx
+COPY rootfs/etc/nginx/nginx.conf /etc/nginx/
+RUN chmod 644 /etc/nginx/nginx.conf
+
+# Create data directory
+VOLUME ["/data"]
+
+# Expose ports
+EXPOSE 631 8080
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV API_SECRET=change-me-in-production
+ENV TOKEN_EXPIRY=86400
+
+# Start services
+CMD ["/run.sh"]
 
 # Labels
 LABEL \
-    io.hass.name="RelayPrint Server" \
-    io.hass.description="Home Assistant add-on to relay print jobs via CUPS and secure tunnels" \
+    io.hass.name="Open-ReplayPrinter" \
+    io.hass.description="CUPS print server with remote access via Home Assistant" \
     io.hass.type="addon" \
-    io.hass.version=${BUILD_VERSION} \
-    io.hass.arch="armhf|aarch64|amd64|i386"
-
-# Ports
-EXPOSE 631
-
-CMD [ "/run.sh" ]
+    io.hass.version="0.1.0" \
+    maintainer="Your Name <your.email@example.com>"

@@ -1,22 +1,40 @@
-#!/usr/bin/with-contenv bashio
-# ==============================================================================
-# Home Assistant Add-on: RelayPrint Server
-# Entrypoint for the add-on
-# ==============================================================================
+#!/usr/bin/env bash
+set -e
 
-# Ensure user and group exist
-addgroup --system lp
-adduser --system lpadmin
-adduser lpadmin lp
+# Start CUPS service
+echo "Starting CUPS service..."
+cupsd -f &
+CUPSD_PID=$!
 
-# Create required directories
-mkdir -p /run/dbus
+# Start Avahi daemon
+echo "Starting Avahi daemon..."
+avahi-daemon --daemonize
 
-# Start dbus (required for CUPS and Avahi)
-if ! pgrep -f dbus-daemon > /dev/null; then
-    bashio::log.info "Starting dbus-daemon..."
-    dbus-daemon --system --nofork &
+# Start the print API server
+echo "Starting Print API server..."
+python3 /usr/local/bin/print_api.py &
+API_PID=$!
+
+# Wait for services to be ready
+sleep 2
+
+# Check if services are running
+if ! ps -p $CUPSD_PID > /dev/null; then
+    echo "CUPS failed to start"
+    exit 1
 fi
 
-# Start the S6 supervisor
-exec /init
+if ! ps -p $API_PID > /dev/null; then
+    echo "API server failed to start"
+    exit 1
+fi
+
+if ! pgrep avahi-daemon > /dev/null; then
+    echo "Avahi daemon failed to start"
+    exit 1
+fi
+
+echo "All services started successfully"
+
+# Keep the container running
+wait $CUPSD_PID $API_PID

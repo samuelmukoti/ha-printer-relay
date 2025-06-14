@@ -1,32 +1,35 @@
 {
-  "name": "RelayPrint Server",
+  "name": "Open-ReplayPrinter",
   "version": "0.1.0",
-  "slug": "relayprint_server",
-  "description": "Home Assistant add-on to relay print jobs via CUPS and secure tunnels.",
-  "url": "https://github.com/samuelmukoti/ha-printer-relay",
+  "slug": "open_replay_printer",
+  "description": "Home Assistant add-on to replace Google Cloud Print with local and remote printing capabilities.",
+  "url": "https://github.com/samuelmukoti/open-replay-printer",
   "startup": "services",
   "boot": "auto",
   "arch": ["aarch64", "amd64", "armhf", "armv7", "i386"],
   "init": false,
   "ports": {
     "631/tcp": 631,
-    "5353/udp": 5353
+    "5353/udp": 5353,
+    "8080/tcp": null
   },
   "ports_description": {
     "631/tcp": "CUPS print server (REQUIRED)",
-    "5353/udp": "Avahi/mDNS service discovery (REQUIRED)"
+    "5353/udp": "Avahi/mDNS service discovery (REQUIRED)",
+    "8080/tcp": "Print API (optional)"
   },
   "ingress": true,
-  "ingress_port": 631,
+  "ingress_port": 8080,
   "panel_icon": "mdi:printer",
-  "panel_title": "RelayPrint",
+  "panel_title": "Open-ReplayPrinter",
   "hassio_api": true,
   "hassio_role": "default",
   "host_network": true,
   "apparmor": true,
   "privileged": ["NET_ADMIN"],
   "devices": ["/dev/bus/usb:/dev/bus/usb:rwm"],
-  "map": ["config:rw"],
+  "map": ["config:rw", "ssl"],
+  "auth_api": true,
   "options": {
     "ssl": true,
     "certfile": "fullchain.pem",
@@ -34,7 +37,24 @@
     "log_level": "info",
     "default_user": "admin",
     "remote_access": false,
-    "allowed_interfaces": ["eth0", "wlan0"]
+    "allowed_interfaces": ["eth0", "wlan0"],
+    "cups_admin_user": "admin",
+    "cups_admin_password": "admin",
+    "api_secret": "change-me-in-production",
+    "token_expiry": 86400,
+    "allowed_networks": ["192.168.0.0/16", "172.16.0.0/12", "10.0.0.0/8"],
+    "expose_api": false,
+    "expose_cups": false,
+    "printer_options": {
+      "default_media": "A4",
+      "color_mode": "color",
+      "duplex": false
+    },
+    "advanced": {
+      "cups_timeout": 30,
+      "job_retention": 24,
+      "max_jobs": 100
+    }
   },
   "schema": {
     "ssl": "bool",
@@ -43,6 +63,23 @@
     "log_level": "list(trace|debug|info|notice|warning|error|fatal)",
     "default_user": "str",
     "remote_access": "bool",
-    "allowed_interfaces": ["str"]
+    "allowed_interfaces": ["str"],
+    "cups_admin_user": "str",
+    "cups_admin_password": "password",
+    "api_secret": "password",
+    "token_expiry": "int(3600,604800)",
+    "allowed_networks": ["str"],
+    "expose_api": "bool",
+    "expose_cups": "bool",
+    "printer_options": {
+      "default_media": "list(A4|Letter|Legal)",
+      "color_mode": "list(color|monochrome)",
+      "duplex": "bool"
+    },
+    "advanced": {
+      "cups_timeout": "int(10,300)",
+      "job_retention": "int(1,168)",
+      "max_jobs": "int(10,1000)"
+    }
   }
 }
