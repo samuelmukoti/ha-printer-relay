@@ -1,0 +1,36 @@
+{
+    "name": "samuelmukoti/relay-print",
+    "description": "WooCommerce plugin for printing orders through Home Assistant printer relay",
+    "type": "wordpress-plugin",
+    "license": "Apache-2.0",
+    "authors": [
+        {
+            "name": "Samuel Mukoti",
+            "email": "samuel@mukoti.com"
+        }
+    ],
+    "require": {
+        "php": ">=7.4",
+        "tecnickcom/tcpdf": "^6.6"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.0",
+        "wp-coding-standards/wpcs": "^3.0",
+        "dealerdirect/phpcodesniffer-composer-installer": "^1.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "RelayPrint\\": "includes/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "phpcs": "phpcs --standard=WordPress",
+        "phpcbf": "phpcbf --standard=WordPress"
+    },
+    "config": {
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true
+        }
+    }
+} 

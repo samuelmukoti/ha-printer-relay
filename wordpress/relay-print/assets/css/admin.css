@@ -1,0 +1,76 @@
+.relay-print-meta-box {
+    padding: 10px;
+}
+
+.relay-print-meta-box .button {
+    width: 100%;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.relay-print-meta-box .spinner {
+    display: none;
+}
+
+.relay-print-meta-box .spinner.is-active {
+    display: inline-block;
+    visibility: visible;
+}
+
+.relay-print-meta-box table {
+    margin-top: 10px;
+}
+
+.relay-print-meta-box th,
+.relay-print-meta-box td {
+    padding: 8px;
+    font-size: 12px;
+}
+
+.relay-print-meta-box h4 {
+    margin: 15px 0 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #eee;
+}
+
+/* Settings page styles */
+.relay-print-settings .form-table th {
+    width: 200px;
+}
+
+.relay-print-settings .form-table td {
+    padding: 15px 10px;
+}
+
+.relay-print-settings .form-table label {
+    display: inline-block;
+    margin-bottom: 5px;
+}
+
+.relay-print-settings .form-table input[type="text"],
+.relay-print-settings .form-table input[type="password"] {
+    width: 300px;
+}
+
+.relay-print-settings .form-table select {
+    min-width: 200px;
+}
+
+.relay-print-settings .status-checkboxes {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 10px;
+    background: #fff;
+}
+
+.relay-print-settings .status-checkboxes label {
+    display: block;
+    margin-bottom: 8px;
+}
+
+.relay-print-settings .test-connection {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+} 
