@@ -101,17 +101,17 @@
   - [x] 2.9 Write integration tests for Avahi advertisement
   - [x] 2.10 Document printer setup process
 
-- [ ] 3.0 Develop REST API for Print Management
-  - [ ] 3.1 Design API endpoints and data structures
-  - [ ] 3.2 Implement /api/print POST endpoint
-  - [ ] 3.3 Implement /api/print/:job_id/status GET endpoint
-  - [ ] 3.4 Create authentication middleware
-  - [ ] 3.5 Implement job queue management logic
-  - [ ] 3.6 Set up error handling and logging
-  - [ ] 3.7 Write unit tests for API endpoints
-  - [ ] 3.8 Write integration tests for print workflow
-  - [ ] 3.9 Document API endpoints and usage
-  - [ ] 3.10 Implement rate limiting and security measures
+- [x] 3.0 Develop REST API for Print Management
+  - [x] 3.1 Design API endpoints and data structures
+  - [x] 3.2 Implement /api/print POST endpoint
+  - [x] 3.3 Implement /api/print/:job_id/status GET endpoint
+  - [x] 3.4 Create authentication middleware
+  - [x] 3.5 Implement job queue management logic
+  - [x] 3.6 Set up error handling and logging
+  - [x] 3.7 Write unit tests for API endpoints
+  - [x] 3.8 Write integration tests for print workflow
+  - [x] 3.9 Document API endpoints and usage
+  - [x] 3.10 Implement rate limiting and security measures
 
 - [ ] 4.0 Create iOS Companion App
   - [ ] 4.1 Set up basic iOS project structure
