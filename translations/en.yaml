@@ -1,0 +1,54 @@
+---
+configuration:
+  log_level:
+    name: Log Level
+    description: Set the logging level for the add-on
+  ssl:
+    name: SSL
+    description: Enable SSL/TLS for secure printing
+  certfile:
+    name: Certificate File
+    description: The certificate file to use for SSL/TLS (must be in /ssl/)
+  keyfile:
+    name: Private Key File
+    description: The private key file to use for SSL/TLS (must be in /ssl/)
+  default_user:
+    name: Default Username
+    description: Username for the CUPS web interface
+  default_password:
+    name: Default Password
+    description: Password for the CUPS web interface (leave empty to keep existing)
+  remote_access:
+    name: Remote Access
+    description: Allow access to printers from outside your network
+  allowed_interfaces:
+    name: Network Interfaces
+    description: List of network interfaces to listen on for print jobs
+  printer_options:
+    name: Printer Options
+    description: Default settings for all printers
+  printer_options.default_media:
+    name: Default Paper Size
+    description: The default paper size to use for print jobs
+  printer_options.color_mode:
+    name: Color Mode
+    description: Default color mode for printing
+  printer_options.duplex:
+    name: Double-sided Printing
+    description: Enable double-sided printing by default
+  advanced:
+    name: Advanced Settings
+    description: Advanced configuration options
+  advanced.cups_timeout:
+    name: CUPS Timeout
+    description: Timeout in seconds for CUPS operations (10-300)
+  advanced.job_retention:
+    name: Job Retention
+    description: How long to keep completed jobs in hours (1-168)
+  advanced.max_jobs:
+    name: Maximum Jobs
+    description: Maximum number of jobs in the queue (10-100)
+
+network:
+  631/tcp: CUPS print server port (required)
+  5353/udp: Avahi/mDNS discovery port (required) 

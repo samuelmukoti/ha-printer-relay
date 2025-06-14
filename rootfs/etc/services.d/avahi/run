@@ -1,0 +1,22 @@
+#!/usr/bin/with-contenv bashio
+# ==============================================================================
+# Home Assistant Add-on: RelayPrint Server
+# Runs the Avahi daemon for printer discovery
+# ==============================================================================
+
+bashio::log.info "Starting Avahi daemon..."
+
+# Wait for dbus
+while ! pgrep -f dbus-daemon > /dev/null; do
+    bashio::log.info "Waiting for dbus..."
+    sleep 1
+done
+
+# Wait for CUPS
+while ! pgrep -f cupsd > /dev/null; do
+    bashio::log.info "Waiting for CUPS..."
+    sleep 1
+done
+
+# Run Avahi
+exec avahi-daemon --no-chroot -f /etc/avahi/avahi-daemon.conf 

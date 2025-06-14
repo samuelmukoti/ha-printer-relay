@@ -1,5 +1,31 @@
 ## Relevant Files
 
+- `Dockerfile` - Multi-arch container definition using official Home Assistant base images
+- `build.yaml` - Build configuration for all supported architectures (aarch64, amd64, armhf, armv7, i386)
+- `config.json` - Add-on configuration and schema with port mappings
+- `config.yaml` - User-friendly configuration UI definition
+- `translations/` - UI localization files
+  - `translations/en.yaml` - English translations for the configuration UI
+- `rootfs/` - Root filesystem overlay
+  - `rootfs/etc/cont-init.d/` - Initialization scripts
+    - `01-persistent-storage.sh` - Sets up persistent storage
+    - `02-cups-config.sh` - Configures CUPS with secure defaults
+  - `rootfs/etc/services.d/` - Service definitions
+    - `cups/run` - CUPS service script
+    - `avahi/run` - Avahi service script
+  - `rootfs/etc/avahi/` - Avahi configuration
+    - `avahi-daemon.conf` - Avahi daemon configuration
+- `tests/` - Test files
+  - `test_addon.sh` - Automated test script
+  - `MANUAL_TESTS.md` - Manual testing checklist
+- `run.sh` - Main entry point script
+- `apparmor.txt` - AppArmor profile for secure port and device access
+- `rootfs/` - Directory containing service configurations
+  - `rootfs/etc/cups/` - CUPS configuration files
+  - `rootfs/etc/avahi/services/` - Avahi service definitions
+- `repository.yaml` - Repository information
+- `README.md` - Add-on documentation
+- `LICENSE` - Project license
 - `addon/` - Directory containing the Home Assistant add-on code
   - `Dockerfile` - Container definition for the RelayPrint add-on
   - `run.sh` - Add-on startup script
@@ -31,13 +57,13 @@
 ## Tasks
 
 - [ ] 1.0 Set up Home Assistant Add-on Infrastructure
-  - [ ] 1.1 Create basic add-on structure with config.yaml and Dockerfile
-  - [ ] 1.2 Set up Alpine Linux base image with required dependencies
-  - [ ] 1.3 Configure add-on ports (631 for CUPS)
-  - [ ] 1.4 Implement add-on configuration UI schema
-  - [ ] 1.5 Create persistent storage for CUPS configuration
-  - [ ] 1.6 Write startup script (run.sh) with proper service initialization
-  - [ ] 1.7 Test add-on installation and basic functionality
+  - [x] 1.1 Create basic add-on structure with config.yaml and Dockerfile
+  - [x] 1.2 Set up Home Assistant official multi-arch base images with required dependencies
+  - [x] 1.3 Configure add-on ports (631 for CUPS, 5353 for mDNS) and security profiles
+  - [x] 1.4 Implement add-on configuration UI schema with translations
+  - [x] 1.5 Create persistent storage for CUPS configuration with secure defaults
+  - [x] 1.6 Write startup script (run.sh) with proper service initialization
+  - [x] 1.7 Test add-on installation and basic functionality
   - [ ] 1.8 Write unit tests for configuration validation
   - [ ] 1.9 Document add-on installation and configuration process
 

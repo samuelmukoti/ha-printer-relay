@@ -1,0 +1,60 @@
+#include <tunables/global>
+
+profile relayprint_server flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+  #include <abstractions/cups-client>
+  
+  # Capabilities
+  capability net_admin,
+  capability net_bind_service,
+  capability net_broadcast,
+  capability net_raw,
+  
+  # Network access
+  network udp,
+  network tcp,
+  network dgram,
+  network stream,
+  network inet,
+  network inet6,
+  network netlink raw,
+  network unix dgram,
+  
+  # CUPS and Avahi ports
+  network tcp bind 631,
+  network udp bind 5353,
+  
+  # Files required for CUPS
+  /etc/cups/** rw,
+  /var/log/cups/** rw,
+  /var/spool/cups/** rw,
+  /var/run/cups/** rw,
+  /var/cache/cups/** rw,
+  
+  # USB devices for printers
+  /dev/bus/usb/** rw,
+  /dev/usb/** rw,
+  /sys/bus/usb/** r,
+  
+  # Home Assistant specific paths
+  /data/** rw,
+  /config/** r,
+  
+  # System paths
+  /proc/** r,
+  /sys/** r,
+  /tmp/** rw,
+  
+  # Programs
+  /usr/sbin/cupsd rix,
+  /usr/sbin/avahi-daemon rix,
+  /usr/bin/python3 ix,
+  /bin/bash ix,
+  /bin/sh ix,
+  
+  # Supervisor access
+  /run/supervisor/** rw,
+  
+  # Allow signals from supervisor
+  signal (receive) peer=*,
+} 

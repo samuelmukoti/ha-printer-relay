@@ -21,12 +21,12 @@
 | Secure remote printing               | Print test page remotely via Home Assistant Cloud or IPPS |
 | Mobile app usability                 | < 3 steps to print from iOS/Android after initial setup   |
 | Automated web-to-print               | WooCommerce order prints automatically within 5 seconds   |
-| Security & Privacy                   | All traffic encrypted (TLS), no open unauth’d ports       |
+| Security & Privacy                   | All traffic encrypted (TLS), no open unauth'd ports       |
 
 ## 3. User Stories
 
 - **US1:** As a Home Assistant user, I can discover and print to my USB/network printer from any device on my LAN.
-- **US2:** As a mobile user, I can “print” from my iPhone/Android phone while away from home, and my print job is relayed to my home printer.
+- **US2:** As a mobile user, I can "print" from my iPhone/Android phone while away from home, and my print job is relayed to my home printer.
 - **US3:** As a store owner, when an order is placed on my WordPress site, a label prints automatically on my local label printer.
 - **US4:** As a system administrator, I can restrict which printers are exposed remotely and manage access tokens.
 
@@ -52,8 +52,9 @@
 ## 5. Non-Functional Requirements
 
 - **Open Source:** All components under OSI-approved licenses.
-- **Compatibility:** Support Home Assistant OS (armv7, arm64, amd64).
-- **Performance:** Handle up to 10 concurrent print jobs; minimal CPU/RAM (<150 MB RAM).
+- **Base Image:** Use official Home Assistant multi-arch base images (ghcr.io/home-assistant/*-base:3.18) for maximum compatibility.
+- **Compatibility:** Support Home Assistant OS on all official architectures (aarch64, amd64, armhf, armv7, i386).
+- **Performance:** Handle up to 10 concurrent print jobs; minimal CPU/RAM (<150 MB RAM).
 - **Security:** All endpoints over TLS; require authenticated access; store credentials securely.
 - **Persistence:** Persist CUPS config and spool across add-on restarts.
 - **Usability:** Zero CLI—everything configurable via Home Assistant UI where possible.

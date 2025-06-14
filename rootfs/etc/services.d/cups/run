@@ -1,0 +1,37 @@
+#!/usr/bin/with-contenv bashio
+# ==============================================================================
+# Home Assistant Add-on: RelayPrint Server
+# Runs the CUPS daemon
+# ==============================================================================
+
+declare -a options
+declare cert_dir
+declare certfile
+declare keyfile
+
+bashio::log.info "Starting CUPS..."
+
+# Wait for dbus
+while ! pgrep -f dbus-daemon > /dev/null; do
+    bashio::log.info "Waiting for dbus..."
+    sleep 1
+done
+
+# Ensure CUPS is not running
+cupsd -c /data/cups/cupsd.conf -t || bashio::exit.nok "CUPS configuration error!"
+
+if bashio::config.true 'ssl'; then
+    certfile="/ssl/$(bashio::config 'certfile')"
+    keyfile="/ssl/$(bashio::config 'keyfile')"
+    
+    if ! bashio::fs.file_exists "${certfile}"; then
+        bashio::exit.nok "SSL certificate file not found!"
+    fi
+    
+    if ! bashio::fs.file_exists "${keyfile}"; then
+        bashio::exit.nok "SSL key file not found!"
+    fi
+fi
+
+# Run CUPS
+exec cupsd -f -c /data/cups/cupsd.conf 
