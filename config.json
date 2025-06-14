@@ -1,0 +1,16 @@
+{
+  "name": "RelayPrint Server",
+  "version": "0.1.0",
+  "slug": "relayprint_server",
+  "description": "Home Assistant add-on to relay print jobs via CUPS and secure tunnels.",
+  "startup": "services",
+  "boot": "auto",
+  "arch": ["armv7", "arm64", "amd64"],
+  "options": {},
+  "schema": {},
+  "ports": {"631/tcp": 631},
+  "ingress": true,
+  "ingress_port": 631,
+  "panel_icon": "mdi:printer",
+  "panel_title": "RelayPrint"
+}
