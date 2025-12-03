@@ -44,8 +44,9 @@ RUN chmod 640 /etc/cups.default/cupsd.conf
 COPY rootfs/etc/avahi/avahi-daemon.conf /etc/avahi/
 RUN chmod 644 /etc/avahi/avahi-daemon.conf
 
-# Make init scripts executable
-RUN chmod +x /etc/cont-init.d/*.sh
+# Make init scripts and services executable
+RUN chmod +x /etc/cont-init.d/*.sh && \
+    chmod +x /etc/services.d/*/run
 
 # Create data directory
 VOLUME ["/data"]
@@ -55,9 +56,6 @@ EXPOSE 631 5353 7779
 
 # Set environment variables (fallbacks for development)
 ENV PYTHONUNBUFFERED=1
-
-# Start services
-CMD ["/run.sh"]
 
 # Labels
 LABEL \
