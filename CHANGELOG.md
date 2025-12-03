@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.16] - 2025-12-03
+
+### Fixed
+- **Fixed garbled printer names** - Added `decode_mdns_name()` function to decode mDNS octal escape sequences (e.g., `\032` -> space). Printer names now display correctly as "HP LaserJet M110w" instead of "HP\032LaserJet\032M110w"
+- **Fixed "Forbidden" error when adding printers** - Updated CUPS policy to allow printer administration from localhost without authentication. The API runs locally inside the container and is already protected by HA Ingress authentication
+
+### Changed
+- Applied mDNS name decoding in both printer discovery and printer add endpoints
+
+## [0.1.15] - 2025-12-03
+
+### Fixed
+- **Fixed lpadmin driver argument error** - Rewrote `add_printer_to_cups()` with proper driver fallback logic
+  - Try IPP Everywhere (`-m everywhere`) first for modern network printers
+  - Fall back to raw queue (`-m raw`) if IPP Everywhere fails
+  - Final fallback without driver specification for auto-detection
+  - Fixes "Unknown argument driverless:..." error
+
+## [0.1.14] - 2025-12-03
+
+### Fixed
+- **Fixed dashboard 404 errors** - Changed absolute paths to relative paths for HA Ingress compatibility
+  - Static assets: `/static/styles.css` -> `static/styles.css`
+  - API calls: `/api/...` -> `api/...`
+  - HA Ingress proxy requires relative paths to work correctly
+
+## [0.1.13] - 2025-12-03
+
+### Fixed
+- **Fixed s6-overlay v3 /init permission denied** - Multiple fixes to resolve container startup
+  - Added `chmod +x /init` in Dockerfile
+  - Set git executable permissions on run scripts
+  - Added proper `user` and `type` bundle files for s6-rc services
+  - Uses single `relayprint` service that manages D-Bus, Avahi, CUPS, and API startup
+
+### Changed
+- Synced config.json with config.yaml (version, apparmor, stdin_open settings)
+
+## [0.1.11] - 2025-12-03
+
+### Changed
+- **Disabled AppArmor** - Set `apparmor: false` to resolve profile loading issues on some HA installations
+- Container security is maintained through Docker isolation and HA Ingress authentication
+
 ## [0.1.10] - 2025-12-02
 
 ### Added
