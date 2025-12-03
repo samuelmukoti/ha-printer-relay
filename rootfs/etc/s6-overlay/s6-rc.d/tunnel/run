@@ -1,0 +1,155 @@
+#!/usr/bin/with-contenv bashio
+# ==============================================================================
+# Tunnel Service - Provides remote access to RelayPrint
+#
+# Supports three providers:
+# 1. LocalTunnel (default): Simple, reliable, no rate limits
+# 2. Cloudflare Quick Tunnel: Zero config, auto-generated URL
+# 3. Cloudflare Named Tunnel: Custom domain with Cloudflare account
+#
+# LocalTunnel is the default - just enable and go!
+# ==============================================================================
+
+TUNNEL_CONFIG_DIR=/data/tunnel
+TUNNEL_URL_FILE=/data/tunnel/tunnel_url.txt
+TUNNEL_CONFIG=/data/tunnel_config.json
+BACKOFF_FILE=/tmp/tunnel_backoff
+LOG_FILE=/tmp/tunnel.log
+
+# Create config directory
+mkdir -p "$TUNNEL_CONFIG_DIR"
+
+# Check if tunnel is enabled
+if [ ! -f "$TUNNEL_CONFIG_DIR/enabled" ]; then
+    bashio::log.info "Remote tunnel not enabled, service sleeping..."
+    exec sleep infinity
+fi
+
+# Implement exponential backoff for restart protection
+if [ -f "$BACKOFF_FILE" ]; then
+    LAST_RUN=$(cat "$BACKOFF_FILE" 2>/dev/null || echo "0")
+    NOW=$(date +%s)
+    DIFF=$((NOW - LAST_RUN))
+    if [ "$DIFF" -lt 30 ]; then
+        BACKOFF=30
+        bashio::log.warning "Tunnel failed recently, waiting ${BACKOFF}s before retry..."
+        sleep "$BACKOFF"
+    fi
+fi
+date +%s > "$BACKOFF_FILE"
+
+# Determine tunnel provider and mode
+TUNNEL_PROVIDER="localtunnel"  # Default to LocalTunnel
+TUNNEL_TOKEN=""
+
+# Read provider from config
+if [ -f "$TUNNEL_CONFIG" ]; then
+    TUNNEL_PROVIDER=$(jq -r '.provider // "localtunnel"' "$TUNNEL_CONFIG" 2>/dev/null)
+    TUNNEL_TOKEN=$(jq -r '.tunnel_token // ""' "$TUNNEL_CONFIG" 2>/dev/null)
+fi
+
+# Legacy support: check for old cloudflare token file
+if [ -f "$TUNNEL_CONFIG_DIR/tunnel_token" ]; then
+    TUNNEL_TOKEN=$(cat "$TUNNEL_CONFIG_DIR/tunnel_token" | tr -d '[:space:]')
+    if [ -n "$TUNNEL_TOKEN" ]; then
+        TUNNEL_PROVIDER="cloudflare_named"
+    fi
+fi
+
+bashio::log.info "Selected tunnel provider: $TUNNEL_PROVIDER"
+
+# Function to capture URL from tunnel output
+capture_url() {
+    local logfile="$1"
+    local pattern="$2"
+    while true; do
+        if [ -f "$logfile" ]; then
+            URL=$(grep -oE "$pattern" "$logfile" 2>/dev/null | head -1)
+            if [ -n "$URL" ]; then
+                echo "$URL" > "$TUNNEL_URL_FILE"
+                bashio::log.info "=============================================="
+                bashio::log.info "REMOTE ACCESS URL: $URL"
+                bashio::log.info "=============================================="
+                bashio::log.info "Mobile app can now connect from anywhere!"
+
+                # Update config file with the URL
+                if [ -f "$TUNNEL_CONFIG" ]; then
+                    TMP_FILE=$(mktemp)
+                    jq --arg url "$URL" '.tunnel_url = $url' "$TUNNEL_CONFIG" > "$TMP_FILE" 2>/dev/null && mv "$TMP_FILE" "$TUNNEL_CONFIG"
+                else
+                    echo "{\"enabled\": true, \"tunnel_url\": \"$URL\", \"provider\": \"$TUNNEL_PROVIDER\"}" > "$TUNNEL_CONFIG"
+                fi
+                # Clear backoff on success
+                rm -f "$BACKOFF_FILE"
+                break
+            fi
+        fi
+        sleep 2
+    done
+}
+
+case "$TUNNEL_PROVIDER" in
+    "localtunnel"|"")
+        # ========================================
+        # LocalTunnel Mode (default, simple)
+        # ========================================
+        bashio::log.info "Starting LocalTunnel..."
+        bashio::log.info "Generating public URL via loca.lt"
+
+        # Clear previous URL and log
+        rm -f "$TUNNEL_URL_FILE" "$LOG_FILE"
+
+        # Start URL capture in background (LocalTunnel URL pattern)
+        capture_url "$LOG_FILE" 'https://[a-zA-Z0-9-]*\.loca\.lt' &
+        CAPTURE_PID=$!
+
+        # Run localtunnel with output to log file
+        exec lt --port 7779 2>&1 | tee "$LOG_FILE"
+        ;;
+
+    "cloudflare_quick")
+        # ========================================
+        # Cloudflare Quick Tunnel Mode (zero config)
+        # ========================================
+        bashio::log.info "Starting Cloudflare Quick Tunnel..."
+        bashio::log.info "Generating temporary public URL (no account required)"
+
+        # Clear previous URL and log
+        rm -f "$TUNNEL_URL_FILE" "$LOG_FILE"
+
+        # Start URL capture in background
+        capture_url "$LOG_FILE" 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' &
+        CAPTURE_PID=$!
+
+        # Run cloudflared with output to log file
+        exec /usr/local/bin/cloudflared tunnel --url http://localhost:7779 --no-autoupdate 2>&1 | tee "$LOG_FILE"
+        ;;
+
+    "cloudflare_named")
+        # ========================================
+        # Cloudflare Named Tunnel Mode (with token/custom domain)
+        # ========================================
+        if [ -z "$TUNNEL_TOKEN" ]; then
+            bashio::log.error "Named tunnel requires a token! Falling back to Quick Tunnel."
+            TUNNEL_PROVIDER="cloudflare_quick"
+
+            rm -f "$TUNNEL_URL_FILE" "$LOG_FILE"
+            capture_url "$LOG_FILE" 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' &
+            exec /usr/local/bin/cloudflared tunnel --url http://localhost:7779 --no-autoupdate 2>&1 | tee "$LOG_FILE"
+        fi
+
+        bashio::log.info "Starting Cloudflare Named Tunnel..."
+        bashio::log.info "Using configured tunnel token for custom domain"
+
+        exec /usr/local/bin/cloudflared tunnel run --token "$TUNNEL_TOKEN"
+        ;;
+
+    *)
+        bashio::log.error "Unknown tunnel provider: $TUNNEL_PROVIDER"
+        bashio::log.info "Falling back to LocalTunnel..."
+
+        rm -f "$TUNNEL_URL_FILE" "$LOG_FILE"
+        capture_url "$LOG_FILE" 'https://[a-zA-Z0-9-]*\.loca\.lt' &
+        exec lt --port 7779 2>&1 | tee "$LOG_FILE"
+        ;;
+esac

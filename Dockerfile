@@ -17,7 +17,12 @@ RUN apk add --no-cache \
     musl-dev \
     python3-dev \
     curl \
-    ca-certificates
+    ca-certificates \
+    nodejs \
+    npm
+
+# Install localtunnel globally for alternative tunnel provider
+RUN npm install -g localtunnel
 
 # Install cloudflared for remote tunnel access
 # Detect architecture and download appropriate binary

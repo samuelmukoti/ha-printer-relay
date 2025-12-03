@@ -325,62 +325,68 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now(timezone.utc).isoformat(),
-        'version': '0.1.21d'
+        'version': '0.1.21e'
     })
 
-CLOUDFLARE_CONFIG_FILE = '/data/cloudflare_config.json'
-TUNNEL_URL_FILE = '/data/cloudflare/tunnel_url.txt'
+TUNNEL_CONFIG_FILE = '/data/tunnel_config.json'
+TUNNEL_URL_FILE = '/data/tunnel/tunnel_url.txt'
 
-def load_cloudflare_config():
-    """Load Cloudflare config from dashboard config file or addon options."""
+# Valid tunnel providers
+TUNNEL_PROVIDERS = ['localtunnel', 'cloudflare_quick', 'cloudflare_named']
+
+def load_tunnel_config():
+    """Load tunnel config from dashboard config file or addon options."""
     config = {
         'enabled': False,
+        'provider': 'localtunnel',  # Default to LocalTunnel
         'tunnel_token': '',
-        'tunnel_url': '',
-        'mode': 'quick'  # 'quick' or 'named'
+        'tunnel_url': ''
     }
-    
+
     # First check dashboard config file (takes precedence)
-    if os.path.exists(CLOUDFLARE_CONFIG_FILE):
+    if os.path.exists(TUNNEL_CONFIG_FILE):
         try:
-            import json
-            with open(CLOUDFLARE_CONFIG_FILE, 'r') as f:
+            with open(TUNNEL_CONFIG_FILE, 'r') as f:
                 dashboard_config = json.load(f)
                 config['enabled'] = dashboard_config.get('enabled', False)
+                config['provider'] = dashboard_config.get('provider', 'localtunnel')
                 config['tunnel_token'] = dashboard_config.get('tunnel_token', '')
                 config['tunnel_url'] = dashboard_config.get('tunnel_url', '')
-                config['mode'] = dashboard_config.get('mode', 'quick')
         except Exception as e:
             logger.warning(f"Failed to read dashboard config: {e}")
-    
+
     # Fallback to addon options
     if not config['enabled']:
         options_file = '/data/options.json'
         if os.path.exists(options_file):
             try:
-                import json
                 with open(options_file, 'r') as f:
                     options = json.load(f)
-                    cloudflare = options.get('cloudflare', {})
-                    config['enabled'] = cloudflare.get('enabled', False)
-                    config['tunnel_token'] = cloudflare.get('tunnel_token', '')
-                    config['tunnel_url'] = cloudflare.get('tunnel_url', '')
+                    tunnel = options.get('tunnel', options.get('cloudflare', {}))
+                    config['enabled'] = tunnel.get('enabled', False)
+                    config['provider'] = tunnel.get('provider', 'localtunnel')
+                    config['tunnel_token'] = tunnel.get('tunnel_token', '')
+                    config['tunnel_url'] = tunnel.get('tunnel_url', '')
             except Exception as e:
                 logger.warning(f"Failed to read addon options: {e}")
-    
-    # For Quick Tunnel mode, read the dynamically generated URL
-    if config['enabled'] and (not config['tunnel_token'] or config['mode'] == 'quick'):
+
+    # Read the dynamically generated URL from tunnel service
+    if config['enabled']:
         if os.path.exists(TUNNEL_URL_FILE):
             try:
                 with open(TUNNEL_URL_FILE, 'r') as f:
                     dynamic_url = f.read().strip()
                     if dynamic_url:
                         config['tunnel_url'] = dynamic_url
-                        config['mode'] = 'quick'
             except Exception as e:
                 logger.warning(f"Failed to read tunnel URL file: {e}")
-    
+
     return config
+
+# Legacy alias for backwards compatibility
+def load_cloudflare_config():
+    """Legacy alias for load_tunnel_config."""
+    return load_tunnel_config()
 
 
 @app.route('/api/config/remote', methods=['GET'])
@@ -389,25 +395,26 @@ def get_remote_config():
 
     This endpoint is intentionally NOT protected by @require_auth
     to allow mobile apps to discover the tunnel URL.
-    Returns the Cloudflare Tunnel URL if configured.
+    Returns the tunnel URL if configured.
     """
-    config = load_cloudflare_config()
-    
-    # Check if tunnel is actually running (URL file exists for quick tunnel)
+    config = load_tunnel_config()
+
+    # Check if tunnel is actually running (URL file exists)
     tunnel_active = False
     if config['enabled']:
-        if config['mode'] == 'quick' and os.path.exists(TUNNEL_URL_FILE):
+        if config['provider'] in ['localtunnel', 'cloudflare_quick'] and os.path.exists(TUNNEL_URL_FILE):
             tunnel_active = True
-        elif config['mode'] == 'named' and config['tunnel_token']:
+        elif config['provider'] == 'cloudflare_named' and config['tunnel_token']:
             tunnel_active = True
 
     return jsonify({
         'tunnel_enabled': config['enabled'],
         'tunnel_active': tunnel_active,
         'tunnel_url': config['tunnel_url'] if config['tunnel_url'] else None,
-        'tunnel_mode': config['mode'],  # 'quick' or 'named'
+        'tunnel_provider': config['provider'],
+        'providers': TUNNEL_PROVIDERS,
         'direct_port': 7779,
-        'api_version': '0.1.21b'
+        'api_version': '0.1.21e'
     })
 
 
@@ -415,48 +422,45 @@ def get_remote_config():
 @require_auth
 def save_remote_config():
     """Save remote access configuration.
-    
-    Supports two modes:
-    - Quick Tunnel (default): Just enable, auto-generates URL
-    - Named Tunnel: Requires Cloudflare account and token
+
+    Supports three providers:
+    - LocalTunnel (default): Simple, reliable, no rate limits
+    - Cloudflare Quick Tunnel: Zero config, auto-generated URL
+    - Cloudflare Named Tunnel: Requires Cloudflare account and token
     """
     try:
         data = request.get_json()
-        
+
         # Load existing config
-        config = load_cloudflare_config()
-        
+        config = load_tunnel_config()
+
         # Update with new values
         if 'enabled' in data:
             config['enabled'] = bool(data['enabled'])
-        if 'mode' in data:
-            config['mode'] = data['mode'] if data['mode'] in ['quick', 'named'] else 'quick'
+        if 'provider' in data:
+            config['provider'] = data['provider'] if data['provider'] in TUNNEL_PROVIDERS else 'localtunnel'
         if 'tunnel_url' in data:
             config['tunnel_url'] = data['tunnel_url'].strip() if data['tunnel_url'] else ''
         if 'tunnel_token' in data:
-            # Update token (can be empty for quick tunnel mode)
             config['tunnel_token'] = data['tunnel_token'].strip() if data['tunnel_token'] else ''
-        
-        # Auto-detect mode based on token
-        if config['tunnel_token']:
-            config['mode'] = 'named'
-        else:
-            config['mode'] = 'quick'
-        
+
+        # Auto-set provider to cloudflare_named if token provided
+        if config['tunnel_token'] and config['provider'] not in ['cloudflare_named']:
+            config['provider'] = 'cloudflare_named'
+
         # Save to config file
-        import json
-        with open(CLOUDFLARE_CONFIG_FILE, 'w') as f:
+        with open(TUNNEL_CONFIG_FILE, 'w') as f:
             json.dump(config, f, indent=2)
-        
+
         # Update the tunnel enabled marker
-        tunnel_config_dir = '/data/cloudflare'
+        tunnel_config_dir = '/data/tunnel'
         os.makedirs(tunnel_config_dir, exist_ok=True)
-        
+
         if config['enabled']:
             # Create enabled marker
             with open(os.path.join(tunnel_config_dir, 'enabled'), 'w') as f:
                 f.write('1')
-            
+
             if config['tunnel_token']:
                 # Named tunnel mode - write token
                 with open(os.path.join(tunnel_config_dir, 'tunnel_token'), 'w') as f:
@@ -465,12 +469,13 @@ def save_remote_config():
                 logger.info("Cloudflare Named Tunnel configuration saved")
                 message = 'Named tunnel configured. Restart the addon to apply changes.'
             else:
-                # Quick tunnel mode - remove token file
+                # Remove token file for other providers
                 token_file = os.path.join(tunnel_config_dir, 'tunnel_token')
                 if os.path.exists(token_file):
                     os.remove(token_file)
-                logger.info("Cloudflare Quick Tunnel enabled")
-                message = 'Quick Tunnel enabled. Restart the addon to generate a public URL.'
+                provider_name = 'LocalTunnel' if config['provider'] == 'localtunnel' else 'Cloudflare Quick Tunnel'
+                logger.info(f"{provider_name} enabled")
+                message = f'{provider_name} enabled. Restart the addon to generate a public URL.'
         else:
             # Remove enabled marker
             enabled_file = os.path.join(tunnel_config_dir, 'enabled')
@@ -479,18 +484,18 @@ def save_remote_config():
             # Clear URL file
             if os.path.exists(TUNNEL_URL_FILE):
                 os.remove(TUNNEL_URL_FILE)
-            logger.info("Cloudflare Tunnel disabled")
+            logger.info("Remote tunnel disabled")
             message = 'Remote access disabled.'
-        
+
         return jsonify({
             'success': True,
             'message': message,
             'tunnel_enabled': config['enabled'],
-            'tunnel_mode': config['mode'],
+            'tunnel_provider': config['provider'],
             'tunnel_url': config['tunnel_url'],
             'restart_required': True
         })
-        
+
     except Exception as e:
         logger.error(f"Failed to save config: {e}")
         return jsonify({'error': str(e)}), 500
@@ -500,8 +505,8 @@ def save_remote_config():
 # Tunnel Management Functions
 # ============================================================================
 
-def start_quick_tunnel():
-    """Start a Cloudflare Quick Tunnel in a background thread."""
+def start_tunnel(provider='localtunnel'):
+    """Start a tunnel in a background thread."""
     global _tunnel_process
 
     with _tunnel_lock:
@@ -521,12 +526,25 @@ def start_quick_tunnel():
         # Ensure config directory exists
         os.makedirs(os.path.dirname(TUNNEL_URL_FILE), exist_ok=True)
 
-        logger.info("Starting Cloudflare Quick Tunnel...")
+        # Determine command and URL pattern based on provider
+        if provider == 'localtunnel':
+            cmd = ['lt', '--port', '7779']
+            url_pattern = r'https://[a-zA-Z0-9-]*\.loca\.lt'
+            provider_name = 'LocalTunnel'
+        elif provider == 'cloudflare_quick':
+            cmd = ['/usr/local/bin/cloudflared', 'tunnel', '--url', 'http://localhost:7779', '--no-autoupdate']
+            url_pattern = r'https://[a-zA-Z0-9-]+\.trycloudflare\.com'
+            provider_name = 'Cloudflare Quick Tunnel'
+        else:
+            logger.error(f"Unsupported provider for instant start: {provider}")
+            return False
+
+        logger.info(f"Starting {provider_name}...")
 
         try:
-            # Start cloudflared in background
+            # Start tunnel in background
             _tunnel_process = subprocess.Popen(
-                ['/usr/local/bin/cloudflared', 'tunnel', '--url', 'http://localhost:7779', '--no-autoupdate'],
+                cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True
@@ -535,24 +553,23 @@ def start_quick_tunnel():
             # Start a thread to capture the URL from output
             def capture_url():
                 for line in iter(_tunnel_process.stdout.readline, ''):
-                    logger.debug(f"cloudflared: {line.strip()}")
-                    if 'trycloudflare.com' in line:
-                        # Extract URL
-                        match = re.search(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', line)
-                        if match:
-                            url = match.group(0)
-                            with open(TUNNEL_URL_FILE, 'w') as f:
-                                f.write(url)
-                            logger.info(f"Quick Tunnel URL captured: {url}")
+                    logger.debug(f"tunnel: {line.strip()}")
+                    match = re.search(url_pattern, line)
+                    if match:
+                        url = match.group(0)
+                        with open(TUNNEL_URL_FILE, 'w') as f:
+                            f.write(url)
+                        logger.info(f"Tunnel URL captured: {url}")
 
-                            # Also update config file
-                            try:
-                                config = load_cloudflare_config()
-                                config['tunnel_url'] = url
-                                with open(CLOUDFLARE_CONFIG_FILE, 'w') as f:
-                                    json.dump(config, f, indent=2)
-                            except Exception as e:
-                                logger.warning(f"Failed to update config with URL: {e}")
+                        # Also update config file
+                        try:
+                            config = load_tunnel_config()
+                            config['tunnel_url'] = url
+                            with open(TUNNEL_CONFIG_FILE, 'w') as f:
+                                json.dump(config, f, indent=2)
+                        except Exception as e:
+                            logger.warning(f"Failed to update config with URL: {e}")
+                        break
 
             url_thread = threading.Thread(target=capture_url, daemon=True)
             url_thread.start()
@@ -561,6 +578,11 @@ def start_quick_tunnel():
         except Exception as e:
             logger.error(f"Failed to start tunnel: {e}")
             return False
+
+
+def start_quick_tunnel():
+    """Legacy alias for start_tunnel with cloudflare_quick."""
+    return start_tunnel('cloudflare_quick')
 
 
 def stop_tunnel():
@@ -591,9 +613,18 @@ def is_tunnel_running():
     with _tunnel_lock:
         if _tunnel_process and _tunnel_process.poll() is None:
             return True
-        # Also check for externally started cloudflared (by s6-overlay)
+        # Also check for externally started tunnel processes (by s6-overlay)
         try:
+            # Check for cloudflared
             result = subprocess.run(['pgrep', '-f', 'cloudflared'], capture_output=True)
+            if result.returncode == 0:
+                return True
+            # Check for localtunnel (lt)
+            result = subprocess.run(['pgrep', '-f', 'lt --port'], capture_output=True)
+            if result.returncode == 0:
+                return True
+            # Check for node localtunnel
+            result = subprocess.run(['pgrep', '-f', 'localtunnel'], capture_output=True)
             return result.returncode == 0
         except Exception:
             return False
@@ -602,34 +633,40 @@ def is_tunnel_running():
 @app.route('/api/tunnel/start', methods=['POST'])
 @require_auth
 def api_start_tunnel():
-    """Start the Quick Tunnel immediately."""
+    """Start the tunnel immediately."""
     try:
-        config = load_cloudflare_config()
+        data = request.get_json() or {}
+        config = load_tunnel_config()
 
-        if config.get('tunnel_token'):
+        # Get provider from request or config
+        provider = data.get('provider', config.get('provider', 'localtunnel'))
+
+        if provider == 'cloudflare_named':
             return jsonify({
                 'success': False,
-                'error': 'Named tunnels require addon restart. Use Quick Tunnel for instant start.'
+                'error': 'Named tunnels require addon restart. Use LocalTunnel or Cloudflare Quick Tunnel for instant start.'
             }), 400
 
         # Update config to enabled
         config['enabled'] = True
-        config['mode'] = 'quick'
-        with open(CLOUDFLARE_CONFIG_FILE, 'w') as f:
+        config['provider'] = provider
+        with open(TUNNEL_CONFIG_FILE, 'w') as f:
             json.dump(config, f, indent=2)
 
         # Create enabled marker for s6 service
-        tunnel_config_dir = '/data/cloudflare'
+        tunnel_config_dir = '/data/tunnel'
         os.makedirs(tunnel_config_dir, exist_ok=True)
         with open(os.path.join(tunnel_config_dir, 'enabled'), 'w') as f:
             f.write('1')
 
         # Start tunnel
-        if start_quick_tunnel():
+        provider_name = 'LocalTunnel' if provider == 'localtunnel' else 'Cloudflare Quick Tunnel'
+        if start_tunnel(provider):
             return jsonify({
                 'success': True,
-                'message': 'Quick Tunnel starting... URL will appear in a few seconds.',
-                'tunnel_starting': True
+                'message': f'{provider_name} starting... URL will appear in a few seconds.',
+                'tunnel_starting': True,
+                'provider': provider
             })
         else:
             return jsonify({
@@ -648,23 +685,25 @@ def api_stop_tunnel():
     """Stop the running tunnel."""
     try:
         # Update config
-        config = load_cloudflare_config()
+        config = load_tunnel_config()
         config['enabled'] = False
         config['tunnel_url'] = ''
-        with open(CLOUDFLARE_CONFIG_FILE, 'w') as f:
+        with open(TUNNEL_CONFIG_FILE, 'w') as f:
             json.dump(config, f, indent=2)
 
         # Remove enabled marker
-        enabled_file = '/data/cloudflare/enabled'
+        enabled_file = '/data/tunnel/enabled'
         if os.path.exists(enabled_file):
             os.remove(enabled_file)
 
         # Stop tunnel
         stop_tunnel()
 
-        # Also try to kill any externally started cloudflared
+        # Also try to kill any externally started tunnel processes
         try:
             subprocess.run(['pkill', '-f', 'cloudflared'], capture_output=True)
+            subprocess.run(['pkill', '-f', 'lt --port'], capture_output=True)
+            subprocess.run(['pkill', '-f', 'localtunnel'], capture_output=True)
         except Exception:
             pass
 
@@ -681,7 +720,7 @@ def api_stop_tunnel():
 @app.route('/api/tunnel/status', methods=['GET'])
 def api_tunnel_status():
     """Get detailed tunnel status."""
-    config = load_cloudflare_config()
+    config = load_tunnel_config()
     running = is_tunnel_running()
 
     # Read URL from file if exists
@@ -699,7 +738,8 @@ def api_tunnel_status():
     return jsonify({
         'enabled': config.get('enabled', False),
         'running': running,
-        'mode': config.get('mode', 'quick'),
+        'provider': config.get('provider', 'localtunnel'),
+        'providers': TUNNEL_PROVIDERS,
         'url': tunnel_url,
         'has_token': bool(config.get('tunnel_token'))
     })

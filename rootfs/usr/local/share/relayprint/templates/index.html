@@ -258,13 +258,34 @@
                     Enable Remote Access
                   </div>
                   <div class="quick-tunnel-desc">
-                    One-click setup via Cloudflare Quick Tunnel (no account needed)
+                    Print from anywhere with your mobile app
                   </div>
                 </div>
                 <label class="toggle-switch">
                   <input type="checkbox" id="cf-enabled" name="enabled" onchange="onTunnelToggle()">
                   <span class="toggle-slider"></span>
                 </label>
+              </div>
+
+              <!-- Provider Selection -->
+              <div class="provider-selection" id="provider-selection" style="display:none;">
+                <label class="form-label" style="margin-bottom:8px;">Tunnel Provider</label>
+                <div class="provider-options">
+                  <label class="provider-option">
+                    <input type="radio" name="tunnel-provider" value="localtunnel" checked>
+                    <div class="provider-info">
+                      <span class="provider-name">LocalTunnel</span>
+                      <span class="provider-desc">Simple & reliable (recommended)</span>
+                    </div>
+                  </label>
+                  <label class="provider-option">
+                    <input type="radio" name="tunnel-provider" value="cloudflare_quick">
+                    <div class="provider-info">
+                      <span class="provider-name">Cloudflare Quick</span>
+                      <span class="provider-desc">No account needed</span>
+                    </div>
+                  </label>
+                </div>
               </div>
 
               <!-- URL Display (shown when active) -->
@@ -878,14 +899,29 @@
     async function loadCloudflareConfig() {
       try {
         const data = await fetchAPI('/config/remote');
-        
+
         // Update form fields
         document.getElementById('cf-enabled').checked = data.tunnel_enabled || false;
-        
+
+        // Show/hide provider selection based on enabled state
+        const providerSelection = document.getElementById('provider-selection');
+        if (data.tunnel_enabled) {
+          providerSelection.style.display = 'block';
+        } else {
+          providerSelection.style.display = 'none';
+        }
+
+        // Set the selected provider
+        const provider = data.tunnel_provider || 'localtunnel';
+        const providerRadio = document.querySelector(`input[name="tunnel-provider"][value="${provider}"]`);
+        if (providerRadio) {
+          providerRadio.checked = true;
+        }
+
         // Show/hide URL display based on active state
         const urlDisplay = document.getElementById('tunnel-url-display');
         const urlValue = document.getElementById('tunnel-url-value');
-        
+
         if (data.tunnel_active && data.tunnel_url) {
           urlDisplay.style.display = 'block';
           urlValue.textContent = data.tunnel_url;
@@ -895,10 +931,10 @@
         } else {
           urlDisplay.style.display = 'none';
         }
-        
+
         // Token field - show placeholder if named tunnel is configured
         const tokenInput = document.getElementById('cf-token');
-        if (data.tunnel_mode === 'named') {
+        if (data.tunnel_provider === 'cloudflare_named') {
           tokenInput.placeholder = '••••••••••••••••••••';
         } else {
           tokenInput.placeholder = 'eyJhIjoiNmU4ZDU3Y... (optional for custom domain)';
@@ -907,19 +943,29 @@
         // Update settings status badge
         updateSettingsStatus(data);
         updateSettingsBanner(data);
-        
+
       } catch (error) {
         console.error('Failed to load config:', error);
       }
     }
 
+    function getProviderDisplayName(provider) {
+      const names = {
+        'localtunnel': 'LocalTunnel',
+        'cloudflare_quick': 'Cloudflare Quick',
+        'cloudflare_named': 'Cloudflare Named'
+      };
+      return names[provider] || provider;
+    }
+
     function updateSettingsStatus(data) {
       const dot = document.getElementById('settings-status-dot');
       const text = document.getElementById('settings-status-text');
-      
+      const provider = data.tunnel_provider || 'localtunnel';
+
       if (data.tunnel_active && data.tunnel_url) {
         dot.className = 'status-dot active';
-        text.textContent = data.tunnel_mode === 'quick' ? 'Quick Tunnel Active' : 'Named Tunnel Active';
+        text.textContent = `${getProviderDisplayName(provider)} Active`;
         text.style.color = 'var(--success-color)';
       } else if (data.tunnel_enabled) {
         dot.className = 'status-dot starting';
@@ -937,13 +983,14 @@
       const icon = document.getElementById('banner-icon');
       const title = document.getElementById('banner-title');
       const text = document.getElementById('banner-text');
-      
+      const provider = data.tunnel_provider || 'localtunnel';
+      const providerName = getProviderDisplayName(provider);
+
       if (data.tunnel_active && data.tunnel_url) {
         banner.className = 'settings-banner success';
         icon.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>`;
-        title.textContent = '🎉 Remote Access Active!';
-        const modeText = data.tunnel_mode === 'quick' ? 'Quick Tunnel' : 'Named Tunnel';
-        text.innerHTML = `${modeText} is running. Mobile app can connect from anywhere.`;
+        title.textContent = 'Remote Access Active!';
+        text.innerHTML = `${providerName} is running. Mobile app can connect from anywhere.`;
       } else if (data.tunnel_enabled && !data.tunnel_url) {
         banner.className = 'settings-banner warning';
         icon.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>`;
@@ -960,8 +1007,12 @@
     function onTunnelToggle() {
       const enabled = document.getElementById('cf-enabled').checked;
       const urlDisplay = document.getElementById('tunnel-url-display');
-      
-      if (!enabled) {
+      const providerSelection = document.getElementById('provider-selection');
+
+      if (enabled) {
+        providerSelection.style.display = 'block';
+      } else {
+        providerSelection.style.display = 'none';
         urlDisplay.style.display = 'none';
       }
     }
@@ -974,6 +1025,8 @@
 
       const enabled = document.getElementById('cf-enabled').checked;
       const token = document.getElementById('cf-token').value.trim();
+      const providerRadio = document.querySelector('input[name="tunnel-provider"]:checked');
+      const provider = providerRadio ? providerRadio.value : 'localtunnel';
 
       try {
         if (enabled) {
@@ -986,6 +1039,7 @@
               method: 'POST',
               body: JSON.stringify({
                 enabled: true,
+                provider: 'cloudflare_named',
                 tunnel_token: token
               })
             });
@@ -996,16 +1050,18 @@
 
             showToast('info', 'Named Tunnel Configured', 'Restart the addon to start the named tunnel with your custom domain.');
           } else {
-            // Quick tunnel - start immediately
+            // Start tunnel with selected provider
             const response = await fetchAPI('/tunnel/start', {
-              method: 'POST'
+              method: 'POST',
+              body: JSON.stringify({ provider: provider })
             });
 
             if (response.error) {
               throw new Error(response.error);
             }
 
-            showToast('success', 'Quick Tunnel Starting', 'Your public URL will appear in a few seconds...');
+            const providerName = getProviderDisplayName(provider);
+            showToast('success', `${providerName} Starting`, 'Your public URL will appear in a few seconds...');
 
             // Poll for URL
             pollForTunnelUrl();

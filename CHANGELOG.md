@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.21e] - 2025-12-03
+
+### Added
+- **LocalTunnel support** - Added LocalTunnel as an alternative tunnel provider
+  - LocalTunnel is now the default provider (simpler, no rate limits)
+  - Choose between LocalTunnel, Cloudflare Quick Tunnel, or Cloudflare Named Tunnel
+  - Provider selection in dashboard Settings tab
+- **Multi-provider tunnel service** - Unified tunnel service supporting all providers
+  - Automatic fallback to LocalTunnel if unknown provider configured
+  - Provider-aware URL pattern matching for each tunnel type
+
+### Changed
+- Renamed service directory from `cloudflared` to `tunnel` for provider-agnostic naming
+- Updated API endpoints to support provider selection
+- Dashboard UI now shows provider dropdown when remote access is enabled
+- Config schema updated: `cloudflare` section renamed to `tunnel` with `provider` option
+
 ## [0.1.21d] - 2025-12-03
 
 ### Fixed
