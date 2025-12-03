@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.21b] - 2025-12-03
+
+### Added
+- **Quick Tunnel Mode** - Zero-config remote access using Cloudflare's free Quick Tunnels
+  - One-click enable from dashboard - no Cloudflare account required
+  - Auto-generates public URL (e.g., `https://random-words.trycloudflare.com`)
+  - URL automatically displayed in dashboard and available to mobile app
+- **Dual Tunnel Modes** - Choose between Quick Tunnel (simple) or Named Tunnel (persistent)
+  - Quick Tunnel: Instant setup, URL changes on restart
+  - Named Tunnel: Requires Cloudflare account, persistent custom domain
+
+### Changed
+- **Improved tunnel service** - cloudflared run script now supports both modes
+- **Mobile app API updates** - Added `tunnel_mode` and `tunnel_active` fields to remote config API
+- **Dashboard UI** - Simplified remote access settings with mode selection
+
 ## [0.1.21a] - 2025-12-03
 
 ### Fixed

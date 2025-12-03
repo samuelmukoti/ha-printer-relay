@@ -317,7 +317,7 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now(timezone.utc).isoformat(),
-        'version': '0.1.21a'
+        'version': '0.1.21b'
     })
 
 CLOUDFLARE_CONFIG_FILE = '/data/cloudflare_config.json'
@@ -399,7 +399,7 @@ def get_remote_config():
         'tunnel_url': config['tunnel_url'] if config['tunnel_url'] else None,
         'tunnel_mode': config['mode'],  # 'quick' or 'named'
         'direct_port': 7779,
-        'api_version': '0.1.21a'
+        'api_version': '0.1.21b'
     })
 
 
