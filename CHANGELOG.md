@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2025-12-03
+
+### Fixed
+- **Container startup fix** - Migrated to s6-overlay v3 service structure
+  - Uses `/etc/s6-overlay/s6-rc.d/` instead of deprecated `/etc/services.d/`
+  - Proper service dependencies (D-Bus → CUPS/Avahi → API)
+  - Fixed "/init: Permission denied" startup error
+
+### Changed
+- Updated Dockerfile to match Home Assistant add-on best practices
+- Updated base image reference to use newer Alpine version
+- Simplified Dockerfile by removing redundant EXPOSE/VOLUME/LABEL directives
+- Added `--break-system-packages` flag for pip install compatibility
+
 ## [0.1.3] - 2025-12-02
 
 ### Added
