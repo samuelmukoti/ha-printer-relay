@@ -1,0 +1,12 @@
+#!/usr/bin/with-contenv bashio
+
+bashio::log.info "Starting Print API server on port 7779..."
+
+# Wait for CUPS to be ready
+while ! pgrep -f cupsd > /dev/null; do
+    bashio::log.info "Waiting for CUPS..."
+    sleep 1
+done
+
+cd /usr/local/bin
+exec python3 -c "from print_api import app; app.run(host='0.0.0.0', port=7779, threaded=True)"

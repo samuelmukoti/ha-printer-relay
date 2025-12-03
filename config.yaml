@@ -33,7 +33,7 @@ devices:
 map:
   - config:rw
 auth_api: true
-init: true
+init: false
 options:
   log_level: info
   cups_admin_user: admin

@@ -1,0 +1,8 @@
+#!/usr/bin/with-contenv bashio
+
+bashio::log.info "Starting D-Bus daemon..."
+
+mkdir -p /run/dbus
+rm -f /run/dbus/pid
+
+exec dbus-daemon --system --nofork

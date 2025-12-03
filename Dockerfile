@@ -28,15 +28,11 @@ RUN mkdir -p /data/cups /data/print_jobs /data/api \
     /usr/local/share/relayprint/templates \
     /usr/local/share/relayprint/static
 
-# Copy configuration files
+# Copy configuration files and rootfs
 COPY rootfs /
-COPY run.sh /
-RUN chmod a+x /run.sh
 
-# Copy API and application files
-COPY rootfs/usr/local/bin/print_api.py /usr/local/bin/
-COPY rootfs/usr/local/bin/job_queue_manager.py /usr/local/bin/
-COPY rootfs/usr/local/bin/printer_discovery.py /usr/local/bin/
+# Remove old services.d structure (using s6-overlay v3 s6-rc.d instead)
+RUN rm -rf /etc/services.d
 
 # Set up CUPS default config (will be overwritten by init scripts)
 RUN mkdir -p /etc/cups.default
@@ -47,9 +43,11 @@ RUN chmod 640 /etc/cups.default/cupsd.conf
 COPY rootfs/etc/avahi/avahi-daemon.conf /etc/avahi/
 RUN chmod 644 /etc/avahi/avahi-daemon.conf
 
-# Make init scripts and services executable
-RUN chmod +x /etc/cont-init.d/*.sh && \
-    chmod +x /etc/services.d/*/run
+# Make init scripts executable
+RUN chmod +x /etc/cont-init.d/*.sh
+
+# Make s6-overlay v3 service scripts executable
+RUN chmod +x /etc/s6-overlay/s6-rc.d/*/run 2>/dev/null || true
 
 # Create data directory
 VOLUME ["/data"]
