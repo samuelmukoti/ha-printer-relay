@@ -15,7 +15,23 @@ RUN apk add --no-cache \
     py3-pip \
     gcc \
     musl-dev \
-    python3-dev
+    python3-dev \
+    curl \
+    ca-certificates
+
+# Install cloudflared for remote tunnel access
+# Detect architecture and download appropriate binary
+RUN ARCH=$(uname -m) && \
+    case "$ARCH" in \
+        x86_64) CF_ARCH="amd64" ;; \
+        aarch64) CF_ARCH="arm64" ;; \
+        armv7l) CF_ARCH="arm" ;; \
+        armhf) CF_ARCH="arm" ;; \
+        *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
+    esac && \
+    curl -L "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CF_ARCH}" \
+        -o /usr/local/bin/cloudflared && \
+    chmod +x /usr/local/bin/cloudflared
 
 # Copy requirements and install Python packages
 COPY requirements.txt /tmp/

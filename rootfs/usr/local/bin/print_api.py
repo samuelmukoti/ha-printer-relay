@@ -317,7 +317,38 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now(timezone.utc).isoformat(),
-        'version': '0.1.20'
+        'version': '0.1.21'
+    })
+
+@app.route('/api/config/remote', methods=['GET'])
+def get_remote_config():
+    """Get remote access configuration for mobile apps.
+
+    This endpoint is intentionally NOT protected by @require_auth
+    to allow mobile apps to discover the tunnel URL.
+    Returns the Cloudflare Tunnel URL if configured.
+    """
+    tunnel_url = None
+    tunnel_enabled = False
+
+    # Try to read from addon options
+    options_file = '/data/options.json'
+    if os.path.exists(options_file):
+        try:
+            import json
+            with open(options_file, 'r') as f:
+                options = json.load(f)
+                cloudflare = options.get('cloudflare', {})
+                tunnel_enabled = cloudflare.get('enabled', False)
+                tunnel_url = cloudflare.get('tunnel_url', '')
+        except Exception as e:
+            logger.warning(f"Failed to read options: {e}")
+
+    return jsonify({
+        'tunnel_enabled': tunnel_enabled,
+        'tunnel_url': tunnel_url if tunnel_url else None,
+        'direct_port': 7779,
+        'api_version': '0.1.21'
     })
 
 # ============================================================================

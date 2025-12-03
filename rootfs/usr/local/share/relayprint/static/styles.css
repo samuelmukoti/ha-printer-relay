@@ -88,6 +88,141 @@ body {
   color: var(--text-primary);
 }
 
+/* Tunnel Status Badge */
+.tunnel-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--bg-secondary);
+  border-radius: 20px;
+  margin-left: 16px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: 1px solid var(--divider-color);
+}
+
+.tunnel-status:hover {
+  background: var(--bg-hover);
+  border-color: var(--text-disabled);
+}
+
+.tunnel-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.tunnel-indicator.loading {
+  background: var(--text-disabled);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.tunnel-indicator.active {
+  background: var(--success-color);
+  box-shadow: 0 0 8px rgba(76, 175, 80, 0.6);
+}
+
+.tunnel-indicator.inactive {
+  background: var(--text-disabled);
+}
+
+.tunnel-indicator.error {
+  background: var(--warning-color);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.tunnel-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.tunnel-status.active .tunnel-label {
+  color: var(--success-color);
+}
+
+/* Tunnel Details Tooltip */
+.tunnel-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-card);
+  border: 1px solid var(--divider-color);
+  border-radius: var(--border-radius-sm);
+  padding: 12px 16px;
+  min-width: 280px;
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  opacity: 0;
+  visibility: hidden;
+  transition: all var(--transition-fast);
+}
+
+.tunnel-status:hover .tunnel-tooltip,
+.tunnel-tooltip.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.tunnel-tooltip::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 6px solid var(--divider-color);
+}
+
+.tunnel-tooltip-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tunnel-tooltip-url {
+  font-size: 12px;
+  font-family: 'Roboto Mono', monospace;
+  color: var(--primary-color);
+  background: var(--bg-secondary);
+  padding: 8px 12px;
+  border-radius: 4px;
+  word-break: break-all;
+  margin-bottom: 8px;
+}
+
+.tunnel-tooltip-hint {
+  font-size: 11px;
+  color: var(--text-disabled);
+}
+
+.tunnel-tooltip-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--primary-color);
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.tunnel-tooltip-copy:hover {
+  text-decoration: underline;
+}
+
 .header-actions {
   display: flex;
   gap: 12px;
@@ -219,6 +354,10 @@ body {
 
 .status-card .icon.warning svg {
   fill: var(--warning-color);
+}
+
+.status-card .icon svg {
+  fill: var(--text-secondary);
 }
 
 .status-card .value {

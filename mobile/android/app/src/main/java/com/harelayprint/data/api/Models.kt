@@ -173,3 +173,12 @@ data class UnitSystem(
     val temperature: String = "",
     val volume: String = ""
 )
+
+// Remote access configuration for mobile apps
+@Serializable
+data class RemoteConfigResponse(
+    @SerialName("tunnel_enabled") val tunnelEnabled: Boolean = false,
+    @SerialName("tunnel_url") val tunnelUrl: String? = null,
+    @SerialName("direct_port") val directPort: Int = 7779,
+    @SerialName("api_version") val apiVersion: String = ""
+)

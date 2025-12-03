@@ -22,10 +22,19 @@ class PrintRepository @Inject constructor(
     private val apiFactory: ApiClientFactory,
     private val settings: SettingsDataStore
 ) {
+    /**
+     * Get the API client using saved configuration.
+     * Uses the discovered ingress URL, falling back to base HA URL if not available.
+     */
     private suspend fun getApi(): RelayPrintApi {
-        val url = settings.haUrl.first()
+        val ingressUrl = settings.ingressUrl.first()
+        val haUrl = settings.haUrl.first()
         val token = settings.haToken.first()
-        return apiFactory.createApi(url, token)
+
+        // Use the saved ingress URL (discovered addon path) if available
+        val effectiveUrl = ingressUrl.ifEmpty { haUrl }
+
+        return apiFactory.createApiWithIngress(haUrl, effectiveUrl, token)
     }
 
     suspend fun testConnection(url: String, token: String): ApiResult<HealthResponse> {

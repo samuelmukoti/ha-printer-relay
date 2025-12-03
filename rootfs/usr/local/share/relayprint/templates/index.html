@@ -18,6 +18,11 @@
           <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
         </svg>
         <h1>RelayPrint</h1>
+        <!-- Remote Access Status Badge -->
+        <div class="tunnel-status" id="tunnel-status" onclick="showTunnelDetails()" title="Click for details">
+          <div class="tunnel-indicator loading" id="tunnel-indicator"></div>
+          <span class="tunnel-label" id="tunnel-label">Checking...</span>
+        </div>
       </div>
       <div class="header-actions">
         <button class="btn btn-secondary" onclick="refreshAll()">
@@ -66,6 +71,16 @@
           </div>
           <div class="value" id="pending-jobs">-</div>
           <div class="label">Pending Jobs</div>
+        </div>
+        <!-- Remote Access Status Card -->
+        <div class="status-card" id="remote-status-card" onclick="showTunnelDetails()" style="cursor:pointer;">
+          <div class="icon" id="remote-icon">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+            </svg>
+          </div>
+          <div class="value" id="remote-status-value" style="font-size:16px;">Checking...</div>
+          <div class="label" id="remote-status-label">Remote Access</div>
         </div>
       </div>
 
@@ -687,16 +702,101 @@
       showToast('info', 'Refreshed', 'Data has been refreshed');
     }
 
+    // Tunnel Status
+    let tunnelConfig = null;
+
+    async function loadTunnelStatus() {
+      const statusEl = document.getElementById('tunnel-status');
+      const indicatorEl = document.getElementById('tunnel-indicator');
+      const labelEl = document.getElementById('tunnel-label');
+
+      // Dashboard status card elements
+      const remoteIcon = document.getElementById('remote-icon');
+      const remoteValue = document.getElementById('remote-status-value');
+      const remoteLabel = document.getElementById('remote-status-label');
+
+      try {
+        const data = await fetchAPI('/config/remote');
+        tunnelConfig = data;
+
+        if (data.tunnel_enabled && data.tunnel_url) {
+          // Tunnel is active - Header badge
+          indicatorEl.className = 'tunnel-indicator active';
+          labelEl.textContent = 'Remote Access';
+          statusEl.className = 'tunnel-status active';
+          statusEl.title = `Remote: ${data.tunnel_url}`;
+
+          // Dashboard card
+          remoteIcon.className = 'icon success';
+          remoteValue.textContent = 'Connected';
+          remoteValue.style.color = 'var(--success-color)';
+          remoteLabel.textContent = 'Cloudflare Tunnel Active';
+        } else {
+          // Tunnel is not configured - Header badge
+          indicatorEl.className = 'tunnel-indicator inactive';
+          labelEl.textContent = 'Local Only';
+          statusEl.className = 'tunnel-status';
+          statusEl.title = 'Cloudflare Tunnel not configured';
+
+          // Dashboard card
+          remoteIcon.className = 'icon';
+          remoteIcon.style.background = 'rgba(158, 158, 158, 0.15)';
+          remoteValue.textContent = 'Not Configured';
+          remoteValue.style.color = 'var(--text-secondary)';
+          remoteLabel.textContent = 'Enable in Settings';
+        }
+      } catch (error) {
+        // API might not support this endpoint yet
+        indicatorEl.className = 'tunnel-indicator inactive';
+        labelEl.textContent = 'Local Only';
+        statusEl.className = 'tunnel-status';
+        statusEl.title = 'Remote access status unavailable';
+
+        // Dashboard card
+        remoteIcon.className = 'icon';
+        remoteIcon.style.background = 'rgba(158, 158, 158, 0.15)';
+        remoteValue.textContent = 'Local Only';
+        remoteValue.style.color = 'var(--text-secondary)';
+        remoteLabel.textContent = 'Remote Access';
+      }
+    }
+
+    function showTunnelDetails() {
+      if (!tunnelConfig) {
+        showToast('info', 'Remote Access',
+          'Remote access status is being checked...');
+        return;
+      }
+
+      if (tunnelConfig.tunnel_enabled && tunnelConfig.tunnel_url) {
+        // Copy URL to clipboard
+        navigator.clipboard.writeText(tunnelConfig.tunnel_url).then(() => {
+          showToast('success', 'Remote Access Active',
+            `URL copied! Mobile app can connect via: ${tunnelConfig.tunnel_url}`);
+        }).catch(() => {
+          showToast('info', 'Remote Access Active',
+            `Mobile app can connect via: ${tunnelConfig.tunnel_url}`);
+        });
+      } else {
+        showToast('info', 'Local Network Only',
+          'Enable Cloudflare Tunnel in addon Configuration tab for remote mobile access');
+      }
+    }
+
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
       loadPrinters();
       loadQueue();
+      loadTunnelStatus();
 
       // Auto-refresh every 30 seconds
       setInterval(() => {
         loadPrinters();
         loadQueue();
       }, 30000);
+
+      // Refresh tunnel status every 60 seconds
+      setInterval(loadTunnelStatus, 60000);
     });
   </script>
 </body>

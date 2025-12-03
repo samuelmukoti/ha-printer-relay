@@ -32,8 +32,9 @@ fun SetupScreen(
     if (uiState.setupStep == SetupStep.AUTHENTICATE && uiState.authUrl != null) {
         OAuthWebViewScreen(
             authUrl = uiState.authUrl!!,
-            onAuthCodeReceived = { code ->
-                viewModel.handleAuthCode(code)
+            haBaseUrl = uiState.haUrl,
+            onAuthCodeReceived = { code, cookies ->
+                viewModel.handleAuthCode(code, cookies)
             },
             onError = { error ->
                 viewModel.handleAuthError(error)

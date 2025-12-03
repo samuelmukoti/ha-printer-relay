@@ -49,7 +49,16 @@ The add-on uses s6-overlay v3 for service management with proper dependencies:
 Services are defined in `/etc/s6-overlay/s6-rc.d/` with proper dependencies ensuring correct startup order.
 
 ### Authentication Strategy
-**Home Assistant Ingress handles all authentication** - the add-on trusts requests coming through Ingress since HA has already authenticated the user. For mobile app access, use HA's long-lived access tokens.
+
+**Important:** HA Ingress does NOT work for REST API calls from mobile apps. Ingress uses session cookies (browser-only) and the Supervisor APIs require admin access that OAuth/LLAT tokens don't have.
+
+**For Browser (Web UI):**
+- Home Assistant Ingress handles authentication via session cookies
+
+**For Mobile Apps (REST API):**
+- Direct port access (7779) with Bearer token authentication
+- Tokens validated against HA's `/api/` endpoint
+- Remote access via built-in Cloudflare Tunnel (recommended) or port forwarding
 
 The only credentials in the add-on are for CUPS administration:
 - `cups_admin_user` / `cups_admin_password` - For managing printers via CUPS web UI
@@ -198,4 +207,23 @@ The add-on supports two authentication modes:
 1. **Ingress (browser/HA sidebar):** Requests with `X-Ingress-Path` header are pre-authenticated by HA
 2. **Direct API (mobile app):** Requests with `Authorization: Bearer <token>` header are validated against HA's `/api/` endpoint
 
-The `/api/health` endpoint is intentionally unprotected to allow discovery probing.
+The `/api/health` and `/api/config/remote` endpoints are intentionally unprotected to allow discovery probing.
+
+### Cloudflare Tunnel (Remote Access)
+
+The add-on includes built-in Cloudflare Tunnel support for secure remote access without port forwarding:
+
+**Configuration Options (in addon settings):**
+- `cloudflare.enabled` - Enable/disable tunnel
+- `cloudflare.tunnel_token` - Token from Cloudflare Zero Trust dashboard
+- `cloudflare.tunnel_url` - Public URL (e.g., `https://relayprint.yourdomain.com`)
+
+**Service:** The `cloudflared` service runs as an s6-overlay longrun service, depends on `relayprint`.
+
+**Setup Steps:**
+1. Create tunnel in Cloudflare Zero Trust dashboard
+2. Configure public hostname → `localhost:7779`
+3. Copy tunnel token to addon settings
+4. Restart addon
+
+See `docs/MOBILE_APP_AUTH.md` for detailed setup guide.

@@ -94,8 +94,9 @@ class SetupViewModel @Inject constructor(
 
     /**
      * Handle successful OAuth authorization code from WebView.
+     * Also receives session cookies from WebView for panel ingress access.
      */
-    fun handleAuthCode(code: String) {
+    fun handleAuthCode(code: String, cookies: String? = null) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 isLoading = true,
@@ -107,8 +108,8 @@ class SetupViewModel @Inject constructor(
             // Exchange code for token
             when (val authResult = authManager.exchangeCodeForToken(code)) {
                 is AuthResult.Success -> {
-                    // Now discover the addon
-                    discoverAddon(authResult.accessToken)
+                    // Now discover the addon - pass cookies for panel ingress
+                    discoverAddon(authResult.accessToken, cookies)
                 }
                 is AuthResult.Error -> {
                     _uiState.value = _uiState.value.copy(
@@ -146,14 +147,19 @@ class SetupViewModel @Inject constructor(
 
     /**
      * Discover the RelayPrint addon and verify connection.
+     * Uses session cookies for panel ingress, or bearer token for API ingress.
      */
-    private suspend fun discoverAddon(token: String) {
+    private suspend fun discoverAddon(token: String, cookies: String? = null) {
         val haUrl = settings.haUrl.first()
 
-        when (val discoveryResult = apiFactory.discoverAddon(haUrl, token)) {
+        when (val discoveryResult = apiFactory.discoverAddon(haUrl, token, cookies)) {
             is AddonDiscoveryResult.Success -> {
-                // Save the ingress URL
-                settings.saveIngressUrl(discoveryResult.ingressUrl)
+                // Save the ingress URL and session token (if used)
+                settings.saveIngressUrl(
+                    ingressUrl = discoveryResult.ingressUrl,
+                    sessionToken = discoveryResult.sessionToken,
+                    addonSlug = discoveryResult.addonSlug
+                )
                 settings.setConfigured(true)
 
                 _uiState.value = _uiState.value.copy(
@@ -193,6 +199,8 @@ class SetupViewModel @Inject constructor(
                 errorMessage = null
             )
 
+            // Clear any cached session and re-discover
+            apiFactory.clearCache()
             discoverAddon(token)
         }
     }

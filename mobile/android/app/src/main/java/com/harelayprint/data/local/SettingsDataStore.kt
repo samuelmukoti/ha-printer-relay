@@ -24,6 +24,8 @@ class SettingsDataStore @Inject constructor(
         val REFRESH_TOKEN = stringPreferencesKey("refresh_token")
         val TOKEN_EXPIRY = longPreferencesKey("token_expiry")
         val INGRESS_URL = stringPreferencesKey("ingress_url")
+        val INGRESS_SESSION_TOKEN = stringPreferencesKey("ingress_session_token")  // HA ingress session token
+        val ADDON_SLUG = stringPreferencesKey("addon_slug")  // Discovered addon slug
         val IS_CONFIGURED = booleanPreferencesKey("is_configured")
         val AUTH_TYPE = stringPreferencesKey("auth_type") // "oauth" or "long_lived"
         val DEFAULT_PRINTER = stringPreferencesKey("default_printer")
@@ -39,6 +41,8 @@ class SettingsDataStore @Inject constructor(
     val refreshToken: Flow<String> = context.dataStore.data.map { it[Keys.REFRESH_TOKEN] ?: "" }
     val tokenExpiry: Flow<Long> = context.dataStore.data.map { it[Keys.TOKEN_EXPIRY] ?: 0L }
     val ingressUrl: Flow<String> = context.dataStore.data.map { it[Keys.INGRESS_URL] ?: "" }
+    val ingressSessionToken: Flow<String> = context.dataStore.data.map { it[Keys.INGRESS_SESSION_TOKEN] ?: "" }
+    val addonSlug: Flow<String> = context.dataStore.data.map { it[Keys.ADDON_SLUG] ?: "" }
     val isConfigured: Flow<Boolean> = context.dataStore.data.map { it[Keys.IS_CONFIGURED] ?: false }
     val authType: Flow<String> = context.dataStore.data.map { it[Keys.AUTH_TYPE] ?: "oauth" }
     val defaultPrinter: Flow<String?> = context.dataStore.data.map { it[Keys.DEFAULT_PRINTER] }
@@ -118,10 +122,26 @@ class SettingsDataStore @Inject constructor(
     }
 
     /**
-     * Save the discovered ingress URL.
+     * Save the discovered ingress URL and session token.
      */
-    suspend fun saveIngressUrl(ingressUrl: String) {
+    suspend fun saveIngressUrl(ingressUrl: String, sessionToken: String? = null, addonSlug: String? = null) {
         context.dataStore.edit { prefs ->
+            prefs[Keys.INGRESS_URL] = ingressUrl
+            if (sessionToken != null) {
+                prefs[Keys.INGRESS_SESSION_TOKEN] = sessionToken
+            }
+            if (addonSlug != null) {
+                prefs[Keys.ADDON_SLUG] = addonSlug
+            }
+        }
+    }
+
+    /**
+     * Update just the ingress session token (for session refresh).
+     */
+    suspend fun updateIngressSessionToken(sessionToken: String, ingressUrl: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.INGRESS_SESSION_TOKEN] = sessionToken
             prefs[Keys.INGRESS_URL] = ingressUrl
         }
     }
@@ -153,6 +173,8 @@ class SettingsDataStore @Inject constructor(
             prefs.remove(Keys.REFRESH_TOKEN)
             prefs.remove(Keys.TOKEN_EXPIRY)
             prefs.remove(Keys.INGRESS_URL)
+            prefs.remove(Keys.INGRESS_SESSION_TOKEN)
+            prefs.remove(Keys.ADDON_SLUG)
             prefs[Keys.IS_CONFIGURED] = false
         }
     }

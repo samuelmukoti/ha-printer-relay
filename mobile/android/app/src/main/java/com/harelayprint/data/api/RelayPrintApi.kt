@@ -48,13 +48,21 @@ interface HaSupervisorApi {
 }
 
 /**
- * RelayPrint addon API - accessed through HA Ingress.
- * Base URL will be dynamically set to the ingress path.
+ * RelayPrint addon API - accessed via direct port or Cloudflare Tunnel.
+ * Base URL will be dynamically set based on discovery.
  */
 interface RelayPrintApi {
 
     @GET("api/health")
     suspend fun healthCheck(): Response<HealthResponse>
+
+    /**
+     * Get remote access configuration.
+     * Returns tunnel URL if Cloudflare Tunnel is configured.
+     * This endpoint is unauthenticated to allow discovery.
+     */
+    @GET("api/config/remote")
+    suspend fun getRemoteConfig(): Response<RemoteConfigResponse>
 
     @GET("api/printers")
     suspend fun getPrinters(): Response<PrintersResponse>

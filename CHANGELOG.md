@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.21] - 2025-12-03
+
+### Added
+- **Remote Access Status Dashboard** - New status card on dashboard showing Cloudflare Tunnel connection status
+  - Real-time tunnel connectivity indicator (connected/disconnected/loading)
+  - Click to view tunnel URL and copy to clipboard
+  - Visual status indicators with color coding
+- **Remote Configuration API** - New `/api/config/remote` endpoint for mobile apps to discover tunnel URL
+- **Cloudflare Tunnel Configuration** - Added `cloudflare.enabled`, `cloudflare.tunnel_token`, and `cloudflare.tunnel_url` options
+
+### Changed
+- Updated dashboard UI with improved styling and remote access status indicators
+- Added tunnel status checking on page load with auto-refresh
+
+## [0.1.20] - 2025-12-03
+
+### Added
+- **Mobile App OAuth2 Authentication** - Android app now uses OAuth2 with PKCE flow for secure authentication
+- **Bearer Token Authentication** - API endpoints now accept Bearer token authentication for mobile access
+- **Port 7779 Exposure** - Added explicit port mapping for mobile app direct access
+
+### Changed
+- Improved mobile app setup flow with WebView-based OAuth login
+- Enhanced addon discovery to support both local and remote access patterns
+
 ## [0.1.19] - 2025-12-03
 
 ### Fixed

@@ -3,6 +3,7 @@ package com.harelayprint.di
 import android.content.Context
 import android.util.Log
 import com.harelayprint.data.api.HaSupervisorApi
+import com.harelayprint.data.api.HealthResponse
 import com.harelayprint.data.api.RelayPrintApi
 import com.harelayprint.data.local.SettingsDataStore
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
@@ -68,7 +69,12 @@ object NetworkModule {
  * Result of addon discovery process.
  */
 sealed class AddonDiscoveryResult {
-    data class Success(val ingressUrl: String, val addonSlug: String, val version: String) : AddonDiscoveryResult()
+    data class Success(
+        val ingressUrl: String,
+        val addonSlug: String,
+        val version: String,
+        val sessionToken: String? = null  // Ingress session token if used
+    ) : AddonDiscoveryResult()
     data class Error(val message: String, val code: Int? = null) : AddonDiscoveryResult()
 }
 
@@ -82,29 +88,37 @@ class ApiClientFactory(
 ) {
     companion object {
         private const val TAG = "ApiClientFactory"
+        private const val PROBE_TIMEOUT_SECONDS = 5L  // Short timeout for discovery probing
     }
 
     private var cachedApi: RelayPrintApi? = null
     private var cachedBaseUrl: String? = null
     private var cachedIngressUrl: String? = null
+    private var cachedAddonSlug: String? = null
+
+    // OkHttpClient with short timeout for discovery probing
+    private val probeClient: OkHttpClient by lazy {
+        okHttpClient.newBuilder()
+            .connectTimeout(PROBE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .readTimeout(PROBE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .build()
+    }
 
     /**
-     * Discover the RelayPrint addon using the HA ingress session API.
+     * Discover the RelayPrint addon.
      *
-     * For external access with OAuth tokens, we need to:
-     * 1. Create an ingress session via POST /api/hassio/ingress/session
-     * 2. Use the session token to construct the ingress URL
-     * 3. Access the addon via /api/hassio/ingress/<session>/
+     * Discovery order:
+     * 1. Check for Cloudflare Tunnel URL (best for remote access)
+     * 2. Direct port 7779 on HA host (local network)
+     * 3. Try common local IPs (fallback for remote URLs)
+     *
+     * Note: HA Ingress does NOT work for REST API calls from mobile apps.
+     * Ingress requires session cookies (browser) or Supervisor access (which
+     * OAuth/LLAT tokens don't have). See docs/MOBILE_APP_AUTH.md for details.
      */
-    suspend fun discoverAddon(haBaseUrl: String, token: String): AddonDiscoveryResult {
+    @Suppress("UNUSED_PARAMETER")
+    suspend fun discoverAddon(haBaseUrl: String, token: String, cookies: String? = null): AddonDiscoveryResult {
         val normalizedBase = normalizeUrl(haBaseUrl).trimEnd('/')
-
-        // Known addon slug patterns to try
-        val addonSlugs = listOf(
-            "885c40c0_relay_print",  // Store addon with repo prefix
-            "local_relay_print",     // Local addon
-            "relay_print"            // Direct slug
-        )
 
         // First, verify the token works by checking HA config
         try {
@@ -119,230 +133,260 @@ class ApiClientFactory(
             Log.d(TAG, "Token validation error: ${e.message}")
         }
 
-        // Extract host from HA URL to try direct addon port
-        val haHost = try {
+        // Extract host from URL for port 7779 access
+        val host = try {
             java.net.URL(normalizedBase).host
         } catch (e: Exception) {
-            null
+            normalizedBase.removePrefix("https://").removePrefix("http://").split("/")[0]
         }
 
-        // Pattern 1: Try direct addon API port (works when on same network)
-        // The addon exposes port 7779 directly with host_network: true
-        if (haHost != null) {
-            val directUrl = "http://$haHost:7779"
-            Log.d(TAG, "Trying direct addon API: $directUrl")
-            val directResult = probeEndpoint(directUrl, token)
-            if (directResult is ProbeResult.Success) {
-                Log.d(TAG, "Found working direct addon API at: $directUrl")
+        // Pattern 1: Try direct port 7779 (primary method for mobile app)
+        // This requires the addon port to be accessible (local network or tunneled)
+        val directUrls = listOf(
+            "https://$host:7779",  // HTTPS (if behind reverse proxy)
+            "http://$host:7779"    // HTTP (local network)
+        )
+
+        Log.d(TAG, "Trying direct port 7779 access...")
+        for (directUrl in directUrls) {
+            Log.d(TAG, "Trying: $directUrl")
+            val probeResult = probeEndpoint(directUrl, token)
+            if (probeResult is ProbeResult.Success) {
+                Log.d(TAG, "Found RelayPrint at: $directUrl (version: ${probeResult.version})")
+
+                // Check if there's a Cloudflare Tunnel URL configured
+                val tunnelUrl = checkForTunnelUrl(directUrl, token)
+                if (tunnelUrl != null) {
+                    Log.d(TAG, "Cloudflare Tunnel URL found: $tunnelUrl")
+                    // Verify tunnel URL works
+                    val tunnelProbe = probeEndpoint(tunnelUrl, token)
+                    if (tunnelProbe is ProbeResult.Success) {
+                        Log.d(TAG, "Using Cloudflare Tunnel for remote access")
+                        cachedIngressUrl = tunnelUrl
+                        cachedAddonSlug = "relay_print"
+                        return AddonDiscoveryResult.Success(
+                            ingressUrl = tunnelUrl,
+                            addonSlug = "relay_print",
+                            version = tunnelProbe.version
+                        )
+                    }
+                }
+
+                // No tunnel or tunnel failed, use direct URL
                 cachedIngressUrl = directUrl
+                cachedAddonSlug = "relay_print"
                 return AddonDiscoveryResult.Success(
                     ingressUrl = directUrl,
                     addonSlug = "relay_print",
-                    version = directResult.version
-                )
-            }
-            if (directResult is ProbeResult.Error) {
-                Log.d(TAG, "Direct addon API failed: ${directResult.message} (code: ${directResult.code})")
-            }
-
-            // Also try HTTPS direct
-            val directHttpsUrl = "https://$haHost:7779"
-            Log.d(TAG, "Trying direct addon API (HTTPS): $directHttpsUrl")
-            val directHttpsResult = probeEndpoint(directHttpsUrl, token)
-            if (directHttpsResult is ProbeResult.Success) {
-                Log.d(TAG, "Found working direct addon API at: $directHttpsUrl")
-                cachedIngressUrl = directHttpsUrl
-                return AddonDiscoveryResult.Success(
-                    ingressUrl = directHttpsUrl,
-                    addonSlug = "relay_print",
-                    version = directHttpsResult.version
-                )
-            }
-        }
-
-        // Pattern 2: Try HA proxy to addon ingress (for remote access)
-        for (slug in addonSlugs) {
-            // Try the hassio_ingress proxy endpoint
-            val ingressProxyUrl = "$normalizedBase/api/hassio_ingress/$slug"
-            Log.d(TAG, "Trying ingress proxy URL: $ingressProxyUrl")
-            val proxyResult = probeEndpoint(ingressProxyUrl, token)
-            if (proxyResult is ProbeResult.Success) {
-                Log.d(TAG, "Found working endpoint at: $ingressProxyUrl")
-                cachedIngressUrl = ingressProxyUrl
-                return AddonDiscoveryResult.Success(
-                    ingressUrl = ingressProxyUrl,
-                    addonSlug = slug,
-                    version = proxyResult.version
-                )
-            }
-            if (proxyResult is ProbeResult.Error) {
-                Log.d(TAG, "Ingress proxy URL failed: ${proxyResult.message} (code: ${proxyResult.code})")
-            }
-        }
-
-        // If no panel URL worked, try Supervisor API (might work with admin tokens)
-        try {
-            val supervisorResult = tryViaSupervisorApi(normalizedBase, token)
-            if (supervisorResult != null) {
-                return supervisorResult
-            }
-        } catch (e: Exception) {
-            Log.d(TAG, "Supervisor API approach failed: ${e.message}")
-        }
-
-        // Nothing worked - provide more helpful error
-        val isLikelyRemote = normalizedBase.let { url ->
-            !url.contains("192.168.") && !url.contains("10.") && !url.contains("172.") && !url.contains("localhost")
-        }
-
-        val errorMessage = if (isLikelyRemote) {
-            "Could not connect to RelayPrint addon remotely.\n\n" +
-            "Remote access requires port 7779 to be forwarded on your router, or use the local IP address when on your home network.\n\n" +
-            "Alternative: Connect to your home WiFi and use the local Home Assistant address (e.g., http://192.168.x.x:8123)"
-        } else {
-            "Could not find RelayPrint addon. Please ensure:\n" +
-            "1. The addon is installed and running\n" +
-            "2. You are on the same network as Home Assistant\n" +
-            "3. Port 7779 is accessible"
-        }
-
-        return AddonDiscoveryResult.Error(errorMessage, 404)
-    }
-
-    /**
-     * Try to create an ingress session for the addon and verify it works.
-     */
-    private suspend fun tryIngressSession(baseUrl: String, addonSlug: String, token: String): AddonDiscoveryResult? {
-        return try {
-            val supervisorApi = createSupervisorApi(baseUrl, token)
-
-            // Create ingress session
-            val sessionRequest = com.harelayprint.data.api.IngressSessionRequest(addon = addonSlug)
-            val sessionResponse = supervisorApi.createIngressSession(sessionRequest)
-
-            if (!sessionResponse.isSuccessful) {
-                Log.d(TAG, "Ingress session failed for $addonSlug: ${sessionResponse.code()} - ${sessionResponse.message()}")
-                return null
-            }
-
-            val sessionData = sessionResponse.body()?.data ?: return null
-            val sessionToken = sessionData.session
-
-            // Construct the ingress URL with session token
-            val ingressUrl = "$baseUrl/api/hassio/ingress/$sessionToken"
-            Log.d(TAG, "Created ingress session, URL: $ingressUrl")
-
-            // Verify the endpoint works
-            val probeResult = probeEndpoint(ingressUrl, token)
-            if (probeResult is ProbeResult.Success) {
-                Log.d(TAG, "Ingress session verified for $addonSlug")
-                cachedIngressUrl = ingressUrl
-                return AddonDiscoveryResult.Success(
-                    ingressUrl = ingressUrl,
-                    addonSlug = addonSlug,
                     version = probeResult.version
                 )
             }
+            if (probeResult is ProbeResult.Error) {
+                Log.d(TAG, "Direct port failed: ${probeResult.message} (code: ${probeResult.code})")
+            }
+        }
 
-            Log.d(TAG, "Ingress session created but health check failed: ${(probeResult as? ProbeResult.Error)?.message}")
-            null
+        // Pattern 2: Try common local IPs if the host is a remote URL (Nabu Casa, etc)
+        // This helps when user is on local WiFi but entered their remote URL
+        if (isRemoteUrl(host)) {
+            Log.d(TAG, "Remote URL detected, trying common local IPs...")
+            val localIps = listOf(
+                "192.168.1.1", "192.168.0.1", "192.168.1.100",
+                "10.0.0.1", "homeassistant.local"
+            )
+            for (localIp in localIps) {
+                val localUrl = "http://$localIp:7779"
+                Log.d(TAG, "Trying local: $localUrl")
+                val probeResult = probeEndpoint(localUrl, token)
+                if (probeResult is ProbeResult.Success) {
+                    Log.d(TAG, "Found RelayPrint at local IP: $localUrl")
+
+                    // Check for tunnel URL
+                    val tunnelUrl = checkForTunnelUrl(localUrl, token)
+                    if (tunnelUrl != null) {
+                        Log.d(TAG, "Cloudflare Tunnel URL found: $tunnelUrl - saving for remote access")
+                        // Store tunnel URL but return local for now (faster)
+                        // App can switch to tunnel when on mobile data
+                        cachedIngressUrl = localUrl
+                        cachedAddonSlug = "relay_print"
+                        return AddonDiscoveryResult.Success(
+                            ingressUrl = localUrl,
+                            addonSlug = "relay_print",
+                            version = probeResult.version,
+                            sessionToken = tunnelUrl  // Store tunnel URL in sessionToken field for now
+                        )
+                    }
+
+                    cachedIngressUrl = localUrl
+                    cachedAddonSlug = "relay_print"
+                    return AddonDiscoveryResult.Success(
+                        ingressUrl = localUrl,
+                        addonSlug = "relay_print",
+                        version = probeResult.version
+                    )
+                }
+            }
+        }
+
+        // Nothing worked - provide helpful error with setup instructions
+        val isNabuCasa = host.contains("nabu.casa") || host.contains("ui.nabu.casa")
+        val errorMessage = if (isNabuCasa) {
+            "Cannot reach RelayPrint addon remotely.\n\n" +
+            "Nabu Casa only proxies Home Assistant (port 8123), not addon APIs.\n\n" +
+            "Options:\n" +
+            "1. Connect to your home WiFi\n" +
+            "2. Enable Cloudflare Tunnel in RelayPrint addon settings\n" +
+            "3. Use VPN to access your home network\n\n" +
+            "See docs/MOBILE_APP_AUTH.md for setup guide."
+        } else {
+            "Cannot reach RelayPrint addon.\n\n" +
+            "Please ensure:\n" +
+            "1. The addon is installed and running\n" +
+            "2. Port 7779 is accessible from your network\n" +
+            "3. If remote: enable Cloudflare Tunnel in addon settings\n\n" +
+            "For local access, connect to your home WiFi."
+        }
+
+        return AddonDiscoveryResult.Error(errorMessage, 0)
+    }
+
+    /**
+     * Check if the addon has a Cloudflare Tunnel URL configured.
+     */
+    private suspend fun checkForTunnelUrl(baseUrl: String, token: String): String? {
+        return try {
+            val configUrl = normalizeUrl(baseUrl) + "api/config/remote"
+            Log.d(TAG, "Checking for tunnel URL at: $configUrl")
+
+            val request = okhttp3.Request.Builder()
+                .url(configUrl)
+                .addHeader("Authorization", "Bearer $token")
+                .build()
+
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val response = probeClient.newCall(request).execute()
+                if (response.isSuccessful) {
+                    val body = response.body?.string()
+                    if (body != null && body.contains("tunnel_url")) {
+                        val remoteConfig = json.decodeFromString<com.harelayprint.data.api.RemoteConfigResponse>(body)
+                        if (remoteConfig.tunnelEnabled && !remoteConfig.tunnelUrl.isNullOrEmpty()) {
+                            remoteConfig.tunnelUrl
+                        } else {
+                            null
+                        }
+                    } else {
+                        null
+                    }
+                } else {
+                    null
+                }
+            }
         } catch (e: Exception) {
-            Log.d(TAG, "Ingress session error for $addonSlug: ${e.message}")
+            Log.d(TAG, "Failed to check tunnel URL: ${e.message}")
             null
         }
     }
+
+    /**
+     * Check if URL appears to be a remote/cloud URL (not local network)
+     */
+    private fun isRemoteUrl(host: String): Boolean {
+        return host.contains("nabu.casa") ||
+               host.contains("duckdns.org") ||
+               host.contains(".com") ||
+               host.contains(".net") ||
+               host.contains(".org") ||
+               (!host.startsWith("192.168.") &&
+                !host.startsWith("10.") &&
+                !host.startsWith("172.") &&
+                !host.contains("localhost") &&
+                !host.contains(".local"))
+    }
+
+    // Note: Ingress session API (POST /api/hassio/ingress/session) requires
+    // Supervisor-level access which OAuth/LLAT tokens don't have.
+    // We use direct port 7779 access instead. See docs/MOBILE_APP_AUTH.md.
 
     private sealed class ProbeResult {
         data class Success(val version: String) : ProbeResult()
         data class Error(val message: String, val code: Int?) : ProbeResult()
     }
 
+    /**
+     * Probe endpoint with authentication (bearer token).
+     * Uses short timeout for fast discovery.
+     * First does a raw HTTP call to check response, then parses JSON if valid.
+     */
     private suspend fun probeEndpoint(baseUrl: String, token: String): ProbeResult {
-        return try {
-            val api = createProbeApi(baseUrl, token)
-            val response = api.healthCheck()
+        val healthUrl = normalizeUrl(baseUrl) + "api/health"
+        Log.d(TAG, "Probing: $healthUrl")
 
-            when {
-                response.isSuccessful && response.body() != null -> {
-                    ProbeResult.Success(response.body()!!.version)
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                // Do a raw HTTP call with headers that indicate API request
+                val request = okhttp3.Request.Builder()
+                    .url(healthUrl)
+                    .addHeader("Authorization", "Bearer $token")
+                    .addHeader("Accept", "application/json")
+                    .addHeader("X-Requested-With", "XMLHttpRequest")  // Indicate AJAX request
+                    .build()
+
+                val response = probeClient.newCall(request).execute()
+                val responseBody = response.body?.string()
+
+                Log.d(TAG, "Probe response: ${response.code} ${response.message}")
+                Log.d(TAG, "Response body (first 500 chars): ${responseBody?.take(500)}")
+
+                when {
+                    response.isSuccessful && responseBody != null -> {
+                        // Check if it's JSON
+                        if (responseBody.trimStart().startsWith("{")) {
+                            try {
+                                val healthResponse = json.decodeFromString<HealthResponse>(responseBody)
+                                ProbeResult.Success(healthResponse.version)
+                            } catch (e: Exception) {
+                                Log.e(TAG, "JSON parse error: ${e.message}")
+                                ProbeResult.Error("Invalid JSON response", null)
+                            }
+                        } else {
+                            Log.e(TAG, "Not JSON - got HTML or other content")
+                            ProbeResult.Error("Got HTML instead of JSON (auth redirect?)", null)
+                        }
+                    }
+                    response.code == 401 -> {
+                        Log.d(TAG, "401 body: ${responseBody?.take(300)}")
+                        ProbeResult.Error("Unauthorized", 401)
+                    }
+                    response.code == 404 -> {
+                        ProbeResult.Error("Not found", 404)
+                    }
+                    else -> {
+                        ProbeResult.Error(response.message, response.code)
+                    }
                 }
-                response.code() == 401 -> {
-                    ProbeResult.Error("Unauthorized", 401)
-                }
-                response.code() == 404 -> {
-                    ProbeResult.Error("Not found", 404)
-                }
-                else -> {
-                    ProbeResult.Error(response.message(), response.code())
-                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Probe error: ${e.javaClass.simpleName}: ${e.message}")
+                e.printStackTrace()
+                ProbeResult.Error(e.message ?: "Network error", null)
             }
-        } catch (e: Exception) {
-            ProbeResult.Error(e.message ?: "Network error", null)
         }
     }
 
-    private fun createProbeApi(baseUrl: String, token: String): RelayPrintApi {
-        val authClient = createAuthenticatedClient(token)
+    // Note: Cookie-based and no-auth probing removed.
+    // Direct port 7779 uses Bearer token auth. See docs/MOBILE_APP_AUTH.md.
 
-        val retrofit = Retrofit.Builder()
-            .baseUrl(normalizeUrl(baseUrl))
-            .client(authClient)
-            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-            .build()
-
-        return retrofit.create(RelayPrintApi::class.java)
-    }
-
-    private suspend fun tryViaSupervisorApi(baseUrl: String, token: String): AddonDiscoveryResult? {
-        try {
-            val supervisorApi = createSupervisorApi(baseUrl, token)
-
-            // First, list all addons to find RelayPrint
-            val addonsResponse = supervisorApi.listAddons()
-            if (!addonsResponse.isSuccessful) {
-                return null // Supervisor API not accessible with this token
-            }
-
-            val addons = addonsResponse.body()?.data?.addons ?: return null
-
-            // Find RelayPrint addon
-            val relayPrintAddon = addons.find { addon ->
-                HaSupervisorApi.KNOWN_ADDON_SLUGS.any { slug ->
-                    addon.slug.contains(slug, ignoreCase = true)
-                } || addon.name.contains("RelayPrint", ignoreCase = true)
-            } ?: return null
-
-            // Get detailed addon info including ingress URL
-            val addonInfoResponse = supervisorApi.getAddonInfo(relayPrintAddon.slug)
-            if (!addonInfoResponse.isSuccessful) {
-                return null
-            }
-
-            val addonInfo = addonInfoResponse.body()?.data ?: return null
-
-            if (!addonInfo.ingress || addonInfo.state != "started") {
-                return null
-            }
-
-            val ingressUrl = addonInfo.ingressUrl ?: addonInfo.ingressEntry ?: return null
-            val fullIngressUrl = buildIngressUrl(baseUrl, ingressUrl)
-
-            cachedIngressUrl = fullIngressUrl
-            return AddonDiscoveryResult.Success(
-                ingressUrl = fullIngressUrl,
-                addonSlug = relayPrintAddon.slug,
-                version = addonInfo.version
-            )
-        } catch (e: Exception) {
-            return null
-        }
-    }
+    // Note: Supervisor API (listAddons, getAddonInfo) requires Supervisor-level access
+    // which OAuth/LLAT tokens don't have. We use direct port 7779 instead.
 
     /**
-     * Create the RelayPrint API client using the discovered ingress URL.
+     * Create the RelayPrint API client.
+     *
+     * For direct port 7779 access, we use Bearer token authentication.
+     * The addon validates tokens against Home Assistant's API.
      */
-    fun createApi(baseUrl: String, token: String): RelayPrintApi {
-        // Use cached ingress URL if available, otherwise use baseUrl directly
+    @Suppress("UNUSED_PARAMETER")
+    fun createApi(baseUrl: String, token: String, cookies: String? = null): RelayPrintApi {
+        // Use cached URL if available, otherwise use baseUrl directly
         val effectiveUrl = cachedIngressUrl ?: baseUrl
 
         // Return cached API if URL hasn't changed
@@ -350,11 +394,12 @@ class ApiClientFactory(
             return cachedApi!!
         }
 
-        val authClient = createAuthenticatedClient(token)
+        Log.d(TAG, "Creating API with bearer token for: $effectiveUrl")
+        val client = createAuthenticatedClient(token)
 
         val retrofit = Retrofit.Builder()
             .baseUrl(normalizeUrl(effectiveUrl))
-            .client(authClient)
+            .client(client)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
 
@@ -364,7 +409,7 @@ class ApiClientFactory(
     }
 
     /**
-     * Create API with explicit ingress URL (after discovery).
+     * Create API with explicit URL (after discovery or manual entry).
      */
     @Suppress("UNUSED_PARAMETER")
     fun createApiWithIngress(haBaseUrl: String, ingressUrl: String, token: String): RelayPrintApi {
@@ -403,6 +448,7 @@ class ApiClientFactory(
         cachedApi = null
         cachedBaseUrl = null
         cachedIngressUrl = null
+        cachedAddonSlug = null
     }
 
     private fun normalizeUrl(url: String): String {
@@ -414,11 +460,5 @@ class ApiClientFactory(
             normalized = "$normalized/"
         }
         return normalized
-    }
-
-    private fun buildIngressUrl(haBaseUrl: String, ingressPath: String): String {
-        val base = normalizeUrl(haBaseUrl).trimEnd('/')
-        val path = if (ingressPath.startsWith("/")) ingressPath else "/$ingressPath"
-        return "$base$path"
     }
 }

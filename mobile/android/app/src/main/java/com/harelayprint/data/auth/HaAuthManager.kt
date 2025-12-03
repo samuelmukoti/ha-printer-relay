@@ -120,14 +120,14 @@ class HaAuthManager @Inject constructor(
     /**
      * Exchange authorization code for access token.
      */
-    suspend fun exchangeCodeForToken(code: String): AuthResult {
+    suspend fun exchangeCodeForToken(code: String): AuthResult = withContext(Dispatchers.IO) {
         if (codeVerifier == null) {
-            return AuthResult.Error("No code verifier found. Please restart the login process.")
+            return@withContext AuthResult.Error("No code verifier found. Please restart the login process.")
         }
 
         val haBaseUrl = settings.haUrl.first()
         if (haBaseUrl.isEmpty()) {
-            return AuthResult.Error("Home Assistant URL not configured")
+            return@withContext AuthResult.Error("Home Assistant URL not configured")
         }
 
         val normalizedUrl = normalizeUrl(haBaseUrl)
@@ -146,46 +146,44 @@ class HaAuthManager @Inject constructor(
             .post(formBody)
             .build()
 
-        return withContext(Dispatchers.IO) {
-            try {
-                val response = okHttpClient.newCall(request).execute()
-                val responseBody = response.body?.string()
+        try {
+            val response = okHttpClient.newCall(request).execute()
+            val responseBody = response.body?.string()
 
-                if (response.isSuccessful && responseBody != null) {
-                    val tokenResponse = json.decodeFromString<TokenResponse>(responseBody)
+            if (response.isSuccessful && responseBody != null) {
+                val tokenResponse = json.decodeFromString<TokenResponse>(responseBody)
 
-                    // Save the token
-                    settings.saveOAuthToken(
-                        accessToken = tokenResponse.accessToken,
-                        refreshToken = tokenResponse.refreshToken,
-                        expiresIn = tokenResponse.expiresIn
-                    )
+                // Save the token
+                settings.saveOAuthToken(
+                    accessToken = tokenResponse.accessToken,
+                    refreshToken = tokenResponse.refreshToken,
+                    expiresIn = tokenResponse.expiresIn
+                )
 
-                    Log.d(TAG, "Successfully obtained access token")
-                    AuthResult.Success(tokenResponse.accessToken)
-                } else {
-                    Log.e(TAG, "Token exchange failed: ${response.code} - $responseBody")
-                    AuthResult.Error("Failed to obtain access token: ${response.message}")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Token exchange error", e)
-                AuthResult.Error(e.message ?: "Network error during authentication")
-            } finally {
-                // Clear the code verifier
-                codeVerifier = null
+                Log.d(TAG, "Successfully obtained access token (expires in ${tokenResponse.expiresIn}s)")
+                AuthResult.Success(tokenResponse.accessToken)
+            } else {
+                Log.e(TAG, "Token exchange failed: ${response.code} - $responseBody")
+                AuthResult.Error("Failed to obtain access token: ${response.message}")
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Token exchange error", e)
+            AuthResult.Error(e.message ?: "Network error during authentication")
+        } finally {
+            // Clear the code verifier
+            codeVerifier = null
         }
     }
 
     /**
      * Refresh the access token using the refresh token.
      */
-    suspend fun refreshToken(): AuthResult {
+    suspend fun refreshToken(): AuthResult = withContext(Dispatchers.IO) {
         val haBaseUrl = settings.haUrl.first()
-        val refreshToken = settings.refreshToken.first()
+        val currentRefreshToken = settings.refreshToken.first()
 
-        if (haBaseUrl.isEmpty() || refreshToken.isEmpty()) {
-            return AuthResult.Error("Not authenticated")
+        if (haBaseUrl.isEmpty() || currentRefreshToken.isEmpty()) {
+            return@withContext AuthResult.Error("Not authenticated")
         }
 
         val normalizedUrl = normalizeUrl(haBaseUrl)
@@ -193,7 +191,7 @@ class HaAuthManager @Inject constructor(
 
         val formBody = FormBody.Builder()
             .add("grant_type", "refresh_token")
-            .add("refresh_token", refreshToken)
+            .add("refresh_token", currentRefreshToken)
             .add("client_id", CLIENT_ID)
             .build()
 
@@ -202,31 +200,29 @@ class HaAuthManager @Inject constructor(
             .post(formBody)
             .build()
 
-        return withContext(Dispatchers.IO) {
-            try {
-                val response = okHttpClient.newCall(request).execute()
-                val responseBody = response.body?.string()
+        try {
+            val response = okHttpClient.newCall(request).execute()
+            val responseBody = response.body?.string()
 
-                if (response.isSuccessful && responseBody != null) {
-                    val tokenResponse = json.decodeFromString<TokenResponse>(responseBody)
+            if (response.isSuccessful && responseBody != null) {
+                val tokenResponse = json.decodeFromString<TokenResponse>(responseBody)
 
-                    // Save the new token
-                    settings.saveOAuthToken(
-                        accessToken = tokenResponse.accessToken,
-                        refreshToken = tokenResponse.refreshToken ?: refreshToken,
-                        expiresIn = tokenResponse.expiresIn
-                    )
+                // Save the new token
+                settings.saveOAuthToken(
+                    accessToken = tokenResponse.accessToken,
+                    refreshToken = tokenResponse.refreshToken ?: currentRefreshToken,
+                    expiresIn = tokenResponse.expiresIn
+                )
 
-                    Log.d(TAG, "Successfully refreshed access token")
-                    AuthResult.Success(tokenResponse.accessToken)
-                } else {
-                    Log.e(TAG, "Token refresh failed: ${response.code} - $responseBody")
-                    AuthResult.Error("Failed to refresh token")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Token refresh error", e)
-                AuthResult.Error(e.message ?: "Network error during token refresh")
+                Log.d(TAG, "Successfully refreshed access token")
+                AuthResult.Success(tokenResponse.accessToken)
+            } else {
+                Log.e(TAG, "Token refresh failed: ${response.code} - $responseBody")
+                AuthResult.Error("Failed to refresh token")
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Token refresh error", e)
+            AuthResult.Error(e.message ?: "Network error during token refresh")
         }
     }
 

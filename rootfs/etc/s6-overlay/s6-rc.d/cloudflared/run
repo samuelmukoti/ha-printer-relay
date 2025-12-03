@@ -1,0 +1,37 @@
+#!/usr/bin/with-contenv bashio
+# ==============================================================================
+# Cloudflare Tunnel Service
+#
+# Runs cloudflared to create a secure tunnel for remote access to the RelayPrint API.
+# Only runs if the tunnel is configured (token provided in addon settings).
+# ==============================================================================
+
+TUNNEL_CONFIG_DIR=/data/cloudflare
+
+# Check if tunnel is enabled and configured
+if [ ! -f "$TUNNEL_CONFIG_DIR/enabled" ]; then
+    bashio::log.info "Cloudflare Tunnel not enabled, service sleeping..."
+    # Sleep indefinitely but allow the service to be restarted if config changes
+    exec sleep infinity
+fi
+
+if [ ! -f "$TUNNEL_CONFIG_DIR/tunnel_token" ]; then
+    bashio::log.error "Tunnel enabled but token file missing!"
+    exec sleep infinity
+fi
+
+# Read the tunnel token
+TUNNEL_TOKEN=$(cat "$TUNNEL_CONFIG_DIR/tunnel_token")
+
+if [ -z "$TUNNEL_TOKEN" ]; then
+    bashio::log.error "Tunnel token is empty!"
+    exec sleep infinity
+fi
+
+bashio::log.info "Starting Cloudflare Tunnel..."
+bashio::log.info "Your RelayPrint API will be accessible via your configured Cloudflare hostname"
+
+# Run cloudflared with the tunnel token
+# The token contains all the configuration (tunnel ID, credentials, etc.)
+exec /usr/local/bin/cloudflared tunnel run --token "$TUNNEL_TOKEN"
+
