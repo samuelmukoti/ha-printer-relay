@@ -35,9 +35,11 @@ def test_list_printers(mock_get_printers, client):
     data = json.loads(response.data)
     assert data['printers'] == mock_printers
 
-@patch('print_api.queue_manager')
-def test_submit_print_job(mock_queue_manager, client):
+@patch('job_queue_manager.get_queue_manager')
+def test_submit_print_job(mock_get_queue_manager, client):
     """Test submitting a print job."""
+    mock_queue_manager = MagicMock()
+    mock_get_queue_manager.return_value = mock_queue_manager
     mock_queue_manager.submit_job.return_value = 123
 
     data = {
@@ -60,9 +62,11 @@ def test_submit_print_job(mock_queue_manager, client):
     assert data['job_id'] == 123
     assert data['status'] == 'submitted'
 
-@patch('print_api.queue_manager')
-def test_get_job_status(mock_queue_manager, client):
+@patch('job_queue_manager.get_queue_manager')
+def test_get_job_status(mock_get_queue_manager, client):
     """Test getting job status."""
+    mock_queue_manager = MagicMock()
+    mock_get_queue_manager.return_value = mock_queue_manager
     mock_status = {
         'job_id': 123,
         'status': 'printing',
@@ -75,9 +79,11 @@ def test_get_job_status(mock_queue_manager, client):
     data = json.loads(response.data)
     assert data == mock_status
 
-@patch('print_api.queue_manager')
-def test_cancel_job(mock_queue_manager, client):
+@patch('job_queue_manager.get_queue_manager')
+def test_cancel_job(mock_get_queue_manager, client):
     """Test canceling a print job."""
+    mock_queue_manager = MagicMock()
+    mock_get_queue_manager.return_value = mock_queue_manager
     mock_queue_manager.cancel_job.return_value = True
 
     response = client.delete('/api/print/123')
@@ -85,9 +91,11 @@ def test_cancel_job(mock_queue_manager, client):
     data = json.loads(response.data)
     assert data['message'] == 'Job canceled successfully'
 
-@patch('print_api.queue_manager')
-def test_get_queue_status(mock_queue_manager, client):
+@patch('job_queue_manager.get_queue_manager')
+def test_get_queue_status(mock_get_queue_manager, client):
     """Test getting queue status."""
+    mock_queue_manager = MagicMock()
+    mock_get_queue_manager.return_value = mock_queue_manager
     mock_status = {
         'active_jobs': 2,
         'queued_jobs': 1,
