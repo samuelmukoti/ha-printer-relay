@@ -36,6 +36,11 @@ COPY rootfs /
 # Remove old services.d structure (using s6-overlay v3 s6-rc.d instead)
 RUN rm -rf /etc/services.d
 
+# Set up CUPS default config (used by init script to populate /data/cups)
+# The init script replaces /etc/cups with a symlink, so we save the default config
+RUN mkdir -p /etc/cups.default && \
+    cp /etc/cups/cupsd.conf /etc/cups.default/
+
 # Make s6-overlay v3 service scripts executable
 RUN chmod +x /etc/s6-overlay/s6-rc.d/*/run
 
