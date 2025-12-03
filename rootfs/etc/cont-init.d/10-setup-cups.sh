@@ -48,8 +48,29 @@ chown -R root:lp /data/printers 2>/dev/null || true
 # Configure CUPS with options from config
 # ==============================================================================
 CUPS_ADMIN_USER=$(bashio::config 'cups_admin_user' 2>/dev/null || echo "admin")
+CUPS_ADMIN_PASSWORD=$(bashio::config 'cups_admin_password' 2>/dev/null || echo "changeme")
 LOG_LEVEL=$(bashio::config 'log_level' 2>/dev/null || echo "info")
 MAX_JOBS=$(bashio::config 'advanced.max_jobs' 2>/dev/null || echo "100")
+
+# Create CUPS admin user if it doesn't exist and add to lpadmin group
+if ! id "${CUPS_ADMIN_USER}" &>/dev/null; then
+    bashio::log.info "Creating CUPS admin user: ${CUPS_ADMIN_USER}"
+    adduser -D -H -s /sbin/nologin "${CUPS_ADMIN_USER}" 2>/dev/null || true
+fi
+
+# Set the password for the admin user
+echo "${CUPS_ADMIN_USER}:${CUPS_ADMIN_PASSWORD}" | chpasswd 2>/dev/null || true
+
+# Add user to lpadmin and sys groups for CUPS administration
+addgroup "${CUPS_ADMIN_USER}" lpadmin 2>/dev/null || true
+addgroup "${CUPS_ADMIN_USER}" lp 2>/dev/null || true
+addgroup "${CUPS_ADMIN_USER}" sys 2>/dev/null || true
+
+# Ensure lpadmin group exists
+addgroup -S lpadmin 2>/dev/null || true
+
+# Add root to lpadmin group so lpadmin command works
+addgroup root lpadmin 2>/dev/null || true
 
 case "${LOG_LEVEL}" in
     debug|debug2|info|warn|warning|error|notice) ;;
@@ -72,6 +93,7 @@ esac
     echo "BrowseLocalProtocols dnssd"
     echo "DefaultAuthType Basic"
     echo "WebInterface Yes"
+    echo "SystemGroup lpadmin root sys"
     echo ""
     echo "<Location />"
     echo "  Order allow,deny"
@@ -108,10 +130,8 @@ esac
     echo "  </Limit>"
     echo "  <Limit CUPS-Add-Modify-Printer CUPS-Delete-Printer CUPS-Add-Modify-Class CUPS-Delete-Class CUPS-Set-Default CUPS-Get-Devices>"
     echo "    AuthType None"
-    echo "    Order deny,allow"
-    echo "    Allow from localhost"
-    echo "    Allow from 127.0.0.1"
-    echo "    Allow from 172.30.32.0/24"
+    echo "    Order allow,deny"
+    echo "    Allow all"
     echo "  </Limit>"
     echo "  <Limit All>"
     echo "    Order deny,allow"

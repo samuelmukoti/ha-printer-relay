@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.18] - 2025-12-03
+
+### Fixed
+- **Fixed lpadmin "Forbidden" error** - Multiple fixes to resolve CUPS authentication issues:
+  - Added `SystemGroup lpadmin root sys` to cupsd.conf
+  - Changed printer admin policy to `AuthType None` with `Allow all`
+  - Create CUPS admin user at startup and add to lpadmin/lp/sys groups
+  - Add root user to lpadmin group for command-line operations
+  - lpadmin now uses configured CUPS credentials via `-U` flag and `CUPS_PASSWORD` env var
+
 ## [0.1.17] - 2025-12-03
 
 ### Added

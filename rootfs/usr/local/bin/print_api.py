@@ -423,14 +423,44 @@ def discover_network_printers():
     # Convert grouped dict to list for API response
     return list(printers_by_ip.values())
 
-def add_printer_to_cups(name, uri, location=''):
-    """Add a printer to CUPS using lpadmin."""
+def get_cups_admin_credentials():
+    """Get CUPS admin credentials from addon options or environment."""
+    import json
+
+    # Try to read from HA addon options file
+    options_file = '/data/options.json'
     try:
+        with open(options_file, 'r') as f:
+            options = json.load(f)
+            return (
+                options.get('cups_admin_user', 'admin'),
+                options.get('cups_admin_password', 'changeme')
+            )
+    except Exception as e:
+        logger.warning(f"Could not read addon options: {e}")
+
+    # Fall back to environment variables or defaults
+    return (
+        os.environ.get('CUPS_ADMIN_USER', 'admin'),
+        os.environ.get('CUPS_ADMIN_PASSWORD', 'changeme')
+    )
+
+def add_printer_to_cups(name, uri, location=''):
+    """Add a printer to CUPS using lpadmin with authentication."""
+    try:
+        # Get CUPS admin credentials
+        cups_user, cups_pass = get_cups_admin_credentials()
+
+        # Set up environment with CUPS credentials
+        env = os.environ.copy()
+
         # For IPP/IPPS printers, use IPP Everywhere (driverless)
         # The 'everywhere' driver works for most modern network printers
 
-        # Build base command
-        cmd = ['lpadmin', '-p', name, '-v', uri, '-E']
+        # Build base command with authentication
+        # Using -U for username, password via CUPS_PASSWORD env var
+        cmd = ['lpadmin', '-U', cups_user, '-p', name, '-v', uri, '-E']
+        env['CUPS_PASSWORD'] = cups_pass
 
         # Add location if provided
         if location:
@@ -438,13 +468,13 @@ def add_printer_to_cups(name, uri, location=''):
 
         # Try IPP Everywhere first (best for modern printers)
         cmd_everywhere = cmd + ['-m', 'everywhere']
-        logger.info(f"Trying to add printer with IPP Everywhere: {' '.join(cmd_everywhere)}")
-        result = subprocess.run(cmd_everywhere, capture_output=True, text=True, timeout=30)
+        logger.info(f"Trying to add printer with IPP Everywhere: lpadmin -U {cups_user} -p {name} -v {uri} -E -m everywhere")
+        result = subprocess.run(cmd_everywhere, capture_output=True, text=True, timeout=30, env=env)
 
         if result.returncode == 0:
             # Enable and accept jobs
-            subprocess.run(['cupsenable', name], capture_output=True, timeout=10)
-            subprocess.run(['cupsaccept', name], capture_output=True, timeout=10)
+            subprocess.run(['cupsenable', name], capture_output=True, timeout=10, env=env)
+            subprocess.run(['cupsaccept', name], capture_output=True, timeout=10, env=env)
             logger.info(f"Successfully added printer {name} with IPP Everywhere")
             return {'success': True}
 
@@ -452,12 +482,12 @@ def add_printer_to_cups(name, uri, location=''):
 
         # Fallback: Try raw queue (works for any printer but no filtering)
         cmd_raw = cmd + ['-m', 'raw']
-        logger.info(f"Trying raw driver: {' '.join(cmd_raw)}")
-        result = subprocess.run(cmd_raw, capture_output=True, text=True, timeout=30)
+        logger.info(f"Trying raw driver: lpadmin -U {cups_user} -p {name} -v {uri} -E -m raw")
+        result = subprocess.run(cmd_raw, capture_output=True, text=True, timeout=30, env=env)
 
         if result.returncode == 0:
-            subprocess.run(['cupsenable', name], capture_output=True, timeout=10)
-            subprocess.run(['cupsaccept', name], capture_output=True, timeout=10)
+            subprocess.run(['cupsenable', name], capture_output=True, timeout=10, env=env)
+            subprocess.run(['cupsaccept', name], capture_output=True, timeout=10, env=env)
             logger.info(f"Successfully added printer {name} with raw driver")
             return {'success': True}
 
@@ -465,11 +495,11 @@ def add_printer_to_cups(name, uri, location=''):
 
         # Last resort: Try without specifying a driver (let CUPS auto-detect)
         logger.info(f"Trying without driver specification")
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, env=env)
 
         if result.returncode == 0:
-            subprocess.run(['cupsenable', name], capture_output=True, timeout=10)
-            subprocess.run(['cupsaccept', name], capture_output=True, timeout=10)
+            subprocess.run(['cupsenable', name], capture_output=True, timeout=10, env=env)
+            subprocess.run(['cupsaccept', name], capture_output=True, timeout=10, env=env)
             logger.info(f"Successfully added printer {name} with auto-detection")
             return {'success': True}
 
