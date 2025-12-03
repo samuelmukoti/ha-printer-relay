@@ -165,8 +165,11 @@ def add_printer():
         if not uri:
             return jsonify({'error': 'Printer URI is required'}), 400
 
+        # Decode mDNS escaped names first (e.g., \032 -> space)
+        decoded_name = decode_mdns_name(name)
+
         # Sanitize printer name (CUPS doesn't like spaces or special chars)
-        safe_name = ''.join(c if c.isalnum() or c in '-_' else '_' for c in name)
+        safe_name = ''.join(c if c.isalnum() or c in '-_' else '_' for c in decoded_name)
 
         result = add_printer_to_cups(safe_name, uri, location)
 
@@ -248,6 +251,17 @@ def health_check():
 # Helper Functions
 # ============================================================================
 
+def decode_mdns_name(name):
+    """Decode mDNS escaped names (e.g., \\032 -> space).
+
+    Avahi/mDNS uses octal escape sequences for special characters.
+    For example: HP\\032LaserJet -> HP LaserJet (\\032 is octal for space)
+    """
+    import re
+    def replace_octal(match):
+        return chr(int(match.group(1), 8))
+    return re.sub(r'\\(\d{3})', replace_octal, name)
+
 def discover_network_printers():
     """Discover printers on the network using avahi-browse."""
     discovered = []
@@ -270,8 +284,8 @@ def discover_network_printers():
             parts = line.split(';')
             if len(parts) >= 8 and parts[0] == '=':
                 # Format: =;interface;protocol;name;type;domain;hostname;address;port;txt
-                name = parts[3]
-                hostname = parts[6]
+                name = decode_mdns_name(parts[3])
+                hostname = decode_mdns_name(parts[6])
                 address = parts[7]
                 port = parts[8] if len(parts) > 8 else '631'
 
@@ -306,8 +320,8 @@ def discover_network_printers():
 
             parts = line.split(';')
             if len(parts) >= 8 and parts[0] == '=':
-                name = parts[3]
-                hostname = parts[6]
+                name = decode_mdns_name(parts[3])
+                hostname = decode_mdns_name(parts[6])
                 address = parts[7]
                 port = parts[8] if len(parts) > 8 else '631'
 
