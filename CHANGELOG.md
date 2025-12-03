@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.21c] - 2025-12-03
+
+### Added
+- **Instant Tunnel Start/Stop** - Remote access can now be enabled/disabled without restarting the addon
+  - New `/api/tunnel/start` endpoint to start Quick Tunnel immediately
+  - New `/api/tunnel/stop` endpoint to stop tunnel
+  - New `/api/tunnel/status` endpoint for real-time status
+- **URL Polling** - Dashboard automatically polls for tunnel URL after starting
+- **Copy URL Button** - Click to copy tunnel URL to clipboard in Settings
+
+### Fixed
+- **Settings UI display issues** - Fixed missing CSS variable that caused broken URL display box
+- **Missing copyTunnelUrl function** - Added missing JavaScript function for URL copy button
+
 ## [0.1.21b] - 2025-12-03
 
 ### Added

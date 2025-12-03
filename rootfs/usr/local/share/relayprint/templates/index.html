@@ -290,9 +290,9 @@
             <div class="form-actions" style="margin-top:16px;">
               <button type="submit" class="btn btn-primary" id="save-config-btn">
                 <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
                 </svg>
-                Save &amp; Restart Tunnel
+                Apply Changes
               </button>
             </div>
           </form>
@@ -968,53 +968,130 @@
 
     async function saveCloudflareConfig(event) {
       event.preventDefault();
-      
+
       const btn = document.getElementById('save-config-btn');
       btn.disabled = true;
-      btn.innerHTML = '<div class="spinner" style="width:18px;height:18px;border-width:2px;"></div> Saving...';
-      
+
       const enabled = document.getElementById('cf-enabled').checked;
-      const token = document.getElementById('cf-token').value;
-      
+      const token = document.getElementById('cf-token').value.trim();
+
       try {
-        const response = await fetchAPI('/config/remote', {
-          method: 'POST',
-          body: JSON.stringify({
-            enabled: enabled,
-            tunnel_token: token
-          })
-        });
-        
-        if (response.error) {
-          throw new Error(response.error);
+        if (enabled) {
+          // Start tunnel
+          btn.innerHTML = '<div class="spinner" style="width:18px;height:18px;border-width:2px;"></div> Starting tunnel...';
+
+          if (token) {
+            // Named tunnel - save config and show restart message
+            const response = await fetchAPI('/config/remote', {
+              method: 'POST',
+              body: JSON.stringify({
+                enabled: true,
+                tunnel_token: token
+              })
+            });
+
+            if (response.error) {
+              throw new Error(response.error);
+            }
+
+            showToast('info', 'Named Tunnel Configured', 'Restart the addon to start the named tunnel with your custom domain.');
+          } else {
+            // Quick tunnel - start immediately
+            const response = await fetchAPI('/tunnel/start', {
+              method: 'POST'
+            });
+
+            if (response.error) {
+              throw new Error(response.error);
+            }
+
+            showToast('success', 'Quick Tunnel Starting', 'Your public URL will appear in a few seconds...');
+
+            // Poll for URL
+            pollForTunnelUrl();
+          }
+        } else {
+          // Stop tunnel
+          btn.innerHTML = '<div class="spinner" style="width:18px;height:18px;border-width:2px;"></div> Stopping tunnel...';
+
+          const response = await fetchAPI('/tunnel/stop', {
+            method: 'POST'
+          });
+
+          if (response.error) {
+            throw new Error(response.error);
+          }
+
+          showToast('success', 'Tunnel Stopped', 'Remote access has been disabled.');
         }
-        
-        showToast('success', 'Settings Saved', response.message || 'Configuration saved.');
-        
+
         // Reload status after a short delay
         setTimeout(() => {
           loadTunnelStatus();
           loadCloudflareConfig();
-        }, 2000);
-        
+        }, 1000);
+
       } catch (error) {
-        showToast('error', 'Save Failed', error.message || 'Failed to save configuration');
+        showToast('error', 'Error', error.message || 'Failed to update tunnel');
       }
-      
+
       btn.disabled = false;
-      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg> Save & Restart Tunnel`;
+      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg> Apply Changes`;
+    }
+
+    async function pollForTunnelUrl() {
+      // Poll for tunnel URL every 2 seconds for up to 30 seconds
+      let attempts = 0;
+      const maxAttempts = 15;
+
+      const poll = async () => {
+        attempts++;
+        try {
+          const status = await fetchAPI('/tunnel/status');
+          if (status.url && status.running) {
+            // URL available!
+            loadCloudflareConfig();
+            loadTunnelStatus();
+            showToast('success', 'Tunnel Active!', `Your URL: ${status.url}`);
+            return;
+          }
+        } catch (e) {
+          console.error('Poll error:', e);
+        }
+
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 2000);
+        } else {
+          // Final check
+          loadCloudflareConfig();
+          loadTunnelStatus();
+        }
+      };
+
+      setTimeout(poll, 2000);
     }
 
     function toggleTokenVisibility() {
       const input = document.getElementById('cf-token');
       const icon = document.getElementById('token-eye-icon');
-      
+
       if (input.type === 'password') {
         input.type = 'text';
         icon.innerHTML = '<path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/>';
       } else {
         input.type = 'password';
         icon.innerHTML = '<path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>';
+      }
+    }
+
+    function copyTunnelUrl() {
+      const urlValue = document.getElementById('tunnel-url-value').textContent;
+      if (urlValue && urlValue !== 'Loading...' && urlValue.startsWith('https://')) {
+        navigator.clipboard.writeText(urlValue).then(() => {
+          showToast('success', 'URL Copied', 'Tunnel URL copied to clipboard');
+        }).catch(() => {
+          showToast('error', 'Copy Failed', 'Could not copy URL to clipboard');
+        });
       }
     }
 

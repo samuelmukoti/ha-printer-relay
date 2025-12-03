@@ -17,9 +17,17 @@ import logging
 import subprocess
 import socket
 import requests
+import threading
+import re
+import signal
+import json
 from datetime import datetime, timezone
 from job_queue_manager import queue_manager
 from printer_discovery import get_printers, PrinterDiscovery
+
+# Global tunnel process management
+_tunnel_process = None
+_tunnel_lock = threading.Lock()
 
 # App configuration
 TEMPLATE_DIR = '/usr/local/share/relayprint/templates'
@@ -317,7 +325,7 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now(timezone.utc).isoformat(),
-        'version': '0.1.21b'
+        'version': '0.1.21c'
     })
 
 CLOUDFLARE_CONFIG_FILE = '/data/cloudflare_config.json'
@@ -486,6 +494,216 @@ def save_remote_config():
     except Exception as e:
         logger.error(f"Failed to save config: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
+# Tunnel Management Functions
+# ============================================================================
+
+def start_quick_tunnel():
+    """Start a Cloudflare Quick Tunnel in a background thread."""
+    global _tunnel_process
+
+    with _tunnel_lock:
+        # Stop existing tunnel if running
+        if _tunnel_process and _tunnel_process.poll() is None:
+            logger.info("Stopping existing tunnel process...")
+            _tunnel_process.terminate()
+            try:
+                _tunnel_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                _tunnel_process.kill()
+
+        # Clear old URL file
+        if os.path.exists(TUNNEL_URL_FILE):
+            os.remove(TUNNEL_URL_FILE)
+
+        # Ensure config directory exists
+        os.makedirs(os.path.dirname(TUNNEL_URL_FILE), exist_ok=True)
+
+        logger.info("Starting Cloudflare Quick Tunnel...")
+
+        try:
+            # Start cloudflared in background
+            _tunnel_process = subprocess.Popen(
+                ['/usr/local/bin/cloudflared', 'tunnel', '--url', 'http://localhost:7779', '--no-autoupdate'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True
+            )
+
+            # Start a thread to capture the URL from output
+            def capture_url():
+                for line in iter(_tunnel_process.stdout.readline, ''):
+                    logger.debug(f"cloudflared: {line.strip()}")
+                    if 'trycloudflare.com' in line:
+                        # Extract URL
+                        match = re.search(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', line)
+                        if match:
+                            url = match.group(0)
+                            with open(TUNNEL_URL_FILE, 'w') as f:
+                                f.write(url)
+                            logger.info(f"Quick Tunnel URL captured: {url}")
+
+                            # Also update config file
+                            try:
+                                config = load_cloudflare_config()
+                                config['tunnel_url'] = url
+                                with open(CLOUDFLARE_CONFIG_FILE, 'w') as f:
+                                    json.dump(config, f, indent=2)
+                            except Exception as e:
+                                logger.warning(f"Failed to update config with URL: {e}")
+
+            url_thread = threading.Thread(target=capture_url, daemon=True)
+            url_thread.start()
+
+            return True
+        except Exception as e:
+            logger.error(f"Failed to start tunnel: {e}")
+            return False
+
+
+def stop_tunnel():
+    """Stop the running tunnel process."""
+    global _tunnel_process
+
+    with _tunnel_lock:
+        if _tunnel_process and _tunnel_process.poll() is None:
+            logger.info("Stopping tunnel process...")
+            _tunnel_process.terminate()
+            try:
+                _tunnel_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                _tunnel_process.kill()
+            _tunnel_process = None
+
+        # Clear URL file
+        if os.path.exists(TUNNEL_URL_FILE):
+            os.remove(TUNNEL_URL_FILE)
+
+        return True
+
+
+def is_tunnel_running():
+    """Check if the tunnel process is running."""
+    global _tunnel_process
+
+    with _tunnel_lock:
+        if _tunnel_process and _tunnel_process.poll() is None:
+            return True
+        # Also check for externally started cloudflared (by s6-overlay)
+        try:
+            result = subprocess.run(['pgrep', '-f', 'cloudflared'], capture_output=True)
+            return result.returncode == 0
+        except Exception:
+            return False
+
+
+@app.route('/api/tunnel/start', methods=['POST'])
+@require_auth
+def api_start_tunnel():
+    """Start the Quick Tunnel immediately."""
+    try:
+        config = load_cloudflare_config()
+
+        if config.get('tunnel_token'):
+            return jsonify({
+                'success': False,
+                'error': 'Named tunnels require addon restart. Use Quick Tunnel for instant start.'
+            }), 400
+
+        # Update config to enabled
+        config['enabled'] = True
+        config['mode'] = 'quick'
+        with open(CLOUDFLARE_CONFIG_FILE, 'w') as f:
+            json.dump(config, f, indent=2)
+
+        # Create enabled marker for s6 service
+        tunnel_config_dir = '/data/cloudflare'
+        os.makedirs(tunnel_config_dir, exist_ok=True)
+        with open(os.path.join(tunnel_config_dir, 'enabled'), 'w') as f:
+            f.write('1')
+
+        # Start tunnel
+        if start_quick_tunnel():
+            return jsonify({
+                'success': True,
+                'message': 'Quick Tunnel starting... URL will appear in a few seconds.',
+                'tunnel_starting': True
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to start tunnel process'
+            }), 500
+
+    except Exception as e:
+        logger.error(f"Failed to start tunnel: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/tunnel/stop', methods=['POST'])
+@require_auth
+def api_stop_tunnel():
+    """Stop the running tunnel."""
+    try:
+        # Update config
+        config = load_cloudflare_config()
+        config['enabled'] = False
+        config['tunnel_url'] = ''
+        with open(CLOUDFLARE_CONFIG_FILE, 'w') as f:
+            json.dump(config, f, indent=2)
+
+        # Remove enabled marker
+        enabled_file = '/data/cloudflare/enabled'
+        if os.path.exists(enabled_file):
+            os.remove(enabled_file)
+
+        # Stop tunnel
+        stop_tunnel()
+
+        # Also try to kill any externally started cloudflared
+        try:
+            subprocess.run(['pkill', '-f', 'cloudflared'], capture_output=True)
+        except Exception:
+            pass
+
+        return jsonify({
+            'success': True,
+            'message': 'Tunnel stopped.'
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to stop tunnel: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/tunnel/status', methods=['GET'])
+def api_tunnel_status():
+    """Get detailed tunnel status."""
+    config = load_cloudflare_config()
+    running = is_tunnel_running()
+
+    # Read URL from file if exists
+    tunnel_url = None
+    if os.path.exists(TUNNEL_URL_FILE):
+        try:
+            with open(TUNNEL_URL_FILE, 'r') as f:
+                tunnel_url = f.read().strip()
+        except Exception:
+            pass
+
+    if not tunnel_url:
+        tunnel_url = config.get('tunnel_url')
+
+    return jsonify({
+        'enabled': config.get('enabled', False),
+        'running': running,
+        'mode': config.get('mode', 'quick'),
+        'url': tunnel_url,
+        'has_token': bool(config.get('tunnel_token'))
+    })
+
 
 # ============================================================================
 # Helper Functions
