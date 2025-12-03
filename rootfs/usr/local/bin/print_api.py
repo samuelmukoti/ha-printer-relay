@@ -417,7 +417,7 @@ def get_remote_config():
         'tunnel_provider': config['provider'],
         'providers': TUNNEL_PROVIDERS,
         'direct_port': 7779,
-        'api_version': '0.1.21f'
+        'api_version': '0.1.21h'
     })
 
 

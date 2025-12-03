@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.21h] - 2025-12-03
+
+### Fixed
+- **Tunnel URL capture** - Improved URL extraction from tunnel output
+  - Added fallback regex for "your url is: X" format from LocalTunnel
+  - Added max attempts limit (2 minutes) to prevent infinite loops
+  - Added better logging for debugging URL capture
+  - URL file now properly saved to `/data/tunnel/tunnel_url.txt`
+  - Config file updated with captured URL for API access
+
 ## [0.1.21g] - 2025-12-03
 
 ### Fixed

@@ -62,30 +62,55 @@ bashio::log.info "Selected tunnel provider: $TUNNEL_PROVIDER"
 capture_url() {
     local logfile="$1"
     local pattern="$2"
-    while true; do
+    local max_attempts=60  # Wait up to 2 minutes
+    local attempts=0
+
+    bashio::log.debug "URL capture started, watching $logfile for pattern: $pattern"
+
+    while [ $attempts -lt $max_attempts ]; do
+        attempts=$((attempts + 1))
+
         if [ -f "$logfile" ]; then
+            # Try multiple extraction methods
             URL=$(grep -oE "$pattern" "$logfile" 2>/dev/null | head -1)
+
+            # If that didn't work, try extracting from "your url is: X" format
+            if [ -z "$URL" ]; then
+                URL=$(grep -i "your url is:" "$logfile" 2>/dev/null | grep -oE 'https://[^ ]+' | head -1)
+            fi
+
             if [ -n "$URL" ]; then
+                # Clean up URL (remove any trailing whitespace/newlines)
+                URL=$(echo "$URL" | tr -d '[:space:]' | tr -d '\n')
+
                 echo "$URL" > "$TUNNEL_URL_FILE"
+                chmod 644 "$TUNNEL_URL_FILE"
+
                 bashio::log.info "=============================================="
                 bashio::log.info "REMOTE ACCESS URL: $URL"
                 bashio::log.info "=============================================="
                 bashio::log.info "Mobile app can now connect from anywhere!"
+                bashio::log.info "URL saved to: $TUNNEL_URL_FILE"
 
                 # Update config file with the URL
                 if [ -f "$TUNNEL_CONFIG" ]; then
                     TMP_FILE=$(mktemp)
                     jq --arg url "$URL" '.tunnel_url = $url' "$TUNNEL_CONFIG" > "$TMP_FILE" 2>/dev/null && mv "$TMP_FILE" "$TUNNEL_CONFIG"
+                    bashio::log.debug "Updated config file with URL"
                 else
                     echo "{\"enabled\": true, \"tunnel_url\": \"$URL\", \"provider\": \"$TUNNEL_PROVIDER\"}" > "$TUNNEL_CONFIG"
+                    bashio::log.debug "Created new config file with URL"
                 fi
                 # Clear backoff on success
                 rm -f "$BACKOFF_FILE"
-                break
+                return 0
             fi
         fi
         sleep 2
     done
+
+    bashio::log.warning "Failed to capture tunnel URL after $max_attempts attempts"
+    return 1
 }
 
 case "$TUNNEL_PROVIDER" in
