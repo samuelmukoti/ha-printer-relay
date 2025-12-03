@@ -1,6 +1,6 @@
 ---
 name: "RelayPrint"
-version: "0.1.9"
+version: "0.1.10"
 slug: "relay_print"
 description: "Home Assistant add-on to replace Google Cloud Print with local and remote printing capabilities."
 url: "https://github.com/samuelmukoti/ha-printer-relay"
@@ -33,6 +33,7 @@ devices:
 map:
   - config:rw
 auth_api: true
+stdin: true
 init: false
 options:
   log_level: info
