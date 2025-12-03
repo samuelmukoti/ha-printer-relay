@@ -11,12 +11,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.harelayprint.R
 import com.harelayprint.ui.viewmodel.SetupStep
 import com.harelayprint.ui.viewmodel.SetupViewModel
 
@@ -28,28 +26,10 @@ fun SetupScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    // Show WebView OAuth screen when authenticating
-    if (uiState.setupStep == SetupStep.AUTHENTICATE && uiState.authUrl != null) {
-        OAuthWebViewScreen(
-            authUrl = uiState.authUrl!!,
-            haBaseUrl = uiState.haUrl,
-            onAuthCodeReceived = { code, cookies ->
-                viewModel.handleAuthCode(code, cookies)
-            },
-            onError = { error ->
-                viewModel.handleAuthError(error)
-            },
-            onCancel = {
-                viewModel.cancelAuth()
-            }
-        )
-        return
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.setup_title)) }
+                title = { Text("RelayPrint Setup") }
             )
         }
     ) { padding ->
@@ -63,7 +43,7 @@ fun SetupScreen(
         ) {
             // Welcome text
             Text(
-                text = stringResource(R.string.setup_welcome),
+                text = "Connect to your RelayPrint addon using the tunnel URL from your Home Assistant dashboard.",
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
@@ -75,19 +55,19 @@ fun SetupScreen(
                 SetupStep.ENTER_URL -> {
                     // URL Field
                     OutlinedTextField(
-                        value = uiState.haUrl,
+                        value = uiState.tunnelUrl,
                         onValueChange = viewModel::updateUrl,
-                        label = { Text(stringResource(R.string.setup_url_label)) },
-                        placeholder = { Text(stringResource(R.string.setup_url_hint)) },
+                        label = { Text("Tunnel URL") },
+                        placeholder = { Text("https://xxx.loca.lt") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !uiState.isLoading
                     )
 
-                    // Hint about OAuth login
+                    // Hint
                     Text(
-                        text = stringResource(R.string.setup_auth_hint),
+                        text = "Find this URL in the RelayPrint addon dashboard under Settings > Remote Access",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -110,19 +90,26 @@ fun SetupScreen(
 
                     Spacer(modifier = Modifier.weight(1f))
 
-                    // Login button
+                    // Connect button
                     Button(
-                        onClick = { viewModel.startLogin() },
+                        onClick = { viewModel.connect() },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = uiState.haUrl.isNotBlank() && !uiState.isLoading
+                        enabled = uiState.tunnelUrl.isNotBlank() && !uiState.isLoading
                     ) {
-                        Text(stringResource(R.string.setup_login))
+                        if (uiState.isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Text("Connect")
                     }
                 }
 
-                SetupStep.AUTHENTICATE -> {
-                    // This shouldn't show since we return early for WebView
-                    // But keeping as fallback
+                SetupStep.CONNECTING -> {
+                    // Connecting
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -130,28 +117,11 @@ fun SetupScreen(
                     ) {
                         CircularProgressIndicator()
                         Text(
-                            text = stringResource(R.string.setup_authenticating),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
-
-                SetupStep.DISCOVERING -> {
-                    // Finding addon
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        if (uiState.isLoading) {
-                            CircularProgressIndicator()
-                        }
-                        Text(
-                            text = stringResource(R.string.setup_discovering),
+                            text = "Connecting to RelayPrint...",
                             style = MaterialTheme.typography.bodyLarge
                         )
 
-                        // Error message during discovery
+                        // Error message during connection
                         uiState.errorMessage?.let { error ->
                             Card(
                                 colors = CardDefaults.cardColors(
@@ -179,11 +149,11 @@ fun SetupScreen(
                             onClick = viewModel::resetSetup,
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text(stringResource(R.string.setup_reset))
+                            Text("Reset")
                         }
 
                         Button(
-                            onClick = viewModel::retryDiscovery,
+                            onClick = viewModel::retryConnection,
                             modifier = Modifier.weight(1f),
                             enabled = !uiState.isLoading
                         ) {
@@ -193,7 +163,7 @@ fun SetupScreen(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text(stringResource(R.string.setup_retry_discovery))
+                            Text("Retry")
                         }
                     }
                 }
@@ -218,7 +188,7 @@ fun SetupScreen(
                             )
                             Column {
                                 Text(
-                                    text = stringResource(R.string.setup_connection_success),
+                                    text = "Connected to RelayPrint!",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
@@ -229,18 +199,37 @@ fun SetupScreen(
                                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                                     )
                                 }
+                                if (uiState.tunnelUrl.isNotEmpty()) {
+                                    Text(
+                                        text = uiState.tunnelUrl,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
+                                    )
+                                }
                             }
                         }
                     }
 
                     Spacer(modifier = Modifier.weight(1f))
 
-                    // Continue button
-                    Button(
-                        onClick = { viewModel.continueToApp(onSetupComplete) },
-                        modifier = Modifier.fillMaxWidth()
+                    // Reset and Continue buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(stringResource(R.string.setup_continue))
+                        OutlinedButton(
+                            onClick = viewModel::resetSetup,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Change URL")
+                        }
+
+                        Button(
+                            onClick = { viewModel.continueToApp(onSetupComplete) },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Continue")
+                        }
                     }
                 }
             }

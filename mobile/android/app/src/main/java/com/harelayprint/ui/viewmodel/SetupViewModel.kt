@@ -2,8 +2,6 @@ package com.harelayprint.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.harelayprint.data.auth.AuthResult
-import com.harelayprint.data.auth.HaAuthManager
 import com.harelayprint.data.local.SettingsDataStore
 import com.harelayprint.di.AddonDiscoveryResult
 import com.harelayprint.di.ApiClientFactory
@@ -16,26 +14,23 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class SetupUiState(
-    val haUrl: String = "",
+    val tunnelUrl: String = "",
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val isConnected: Boolean = false,
     val serverVersion: String? = null,
-    val setupStep: SetupStep = SetupStep.ENTER_URL,
-    val authUrl: String? = null  // URL for WebView OAuth
+    val setupStep: SetupStep = SetupStep.ENTER_URL
 )
 
 enum class SetupStep {
-    ENTER_URL,      // User enters HA URL
-    AUTHENTICATE,   // OAuth login in WebView
-    DISCOVERING,    // Finding RelayPrint addon
+    ENTER_URL,      // User enters tunnel URL
+    CONNECTING,     // Connecting to RelayPrint
     COMPLETE        // Ready to use
 }
 
 @HiltViewModel
 class SetupViewModel @Inject constructor(
     private val settings: SettingsDataStore,
-    private val authManager: HaAuthManager,
     private val apiFactory: ApiClientFactory
 ) : ViewModel() {
 
@@ -47,7 +42,10 @@ class SetupViewModel @Inject constructor(
         viewModelScope.launch {
             val isConfigured = settings.isConfigured.first()
             if (isConfigured) {
+                // Load saved tunnel URL
+                val savedTunnelUrl = settings.tunnelUrl.first()
                 _uiState.value = _uiState.value.copy(
+                    tunnelUrl = savedTunnelUrl,
                     setupStep = SetupStep.COMPLETE,
                     isConnected = true
                 )
@@ -57,65 +55,60 @@ class SetupViewModel @Inject constructor(
 
     fun updateUrl(url: String) {
         _uiState.value = _uiState.value.copy(
-            haUrl = url,
+            tunnelUrl = url,
             errorMessage = null,
             isConnected = false
         )
     }
 
     /**
-     * Start the OAuth2 login flow.
-     * Builds the auth URL and transitions to the AUTHENTICATE step.
+     * Connect to RelayPrint using the tunnel URL.
+     * No authentication needed - the tunnel provides public access.
      */
-    fun startLogin() {
-        val url = _uiState.value.haUrl.trim()
+    fun connect() {
+        val url = _uiState.value.tunnelUrl.trim()
 
         if (url.isEmpty()) {
             _uiState.value = _uiState.value.copy(
-                errorMessage = "Please enter your Home Assistant URL"
+                errorMessage = "Please enter the RelayPrint tunnel URL"
             )
             return
         }
 
         viewModelScope.launch {
-            // Save the URL first
-            settings.saveHaUrl(url)
-
-            // Build the OAuth URL
-            val authUrl = authManager.buildAuthUrl(url)
-
-            _uiState.value = _uiState.value.copy(
-                setupStep = SetupStep.AUTHENTICATE,
-                authUrl = authUrl,
-                errorMessage = null
-            )
-        }
-    }
-
-    /**
-     * Handle successful OAuth authorization code from WebView.
-     * Also receives session cookies from WebView for panel ingress access.
-     */
-    fun handleAuthCode(code: String, cookies: String? = null) {
-        viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 isLoading = true,
-                setupStep = SetupStep.DISCOVERING,
-                authUrl = null,
+                setupStep = SetupStep.CONNECTING,
                 errorMessage = null
             )
 
-            // Exchange code for token
-            when (val authResult = authManager.exchangeCodeForToken(code)) {
-                is AuthResult.Success -> {
-                    // Now discover the addon - pass cookies for panel ingress
-                    discoverAddon(authResult.accessToken, cookies)
+            // Connect to the tunnel URL (no token needed for tunnel access)
+            when (val result = apiFactory.discoverAddon(url, "", null)) {
+                is AddonDiscoveryResult.Success -> {
+                    // Save the tunnel URL
+                    settings.saveTunnelUrl(
+                        tunnelUrl = result.tunnelUrl ?: url,
+                        provider = result.tunnelProvider ?: "localtunnel"
+                    )
+                    settings.saveIngressUrl(
+                        ingressUrl = result.ingressUrl,
+                        addonSlug = result.addonSlug
+                    )
+                    settings.setConfigured(true)
+
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        isConnected = true,
+                        serverVersion = result.version,
+                        setupStep = SetupStep.COMPLETE,
+                        errorMessage = null
+                    )
                 }
-                is AuthResult.Error -> {
+                is AddonDiscoveryResult.Error -> {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         setupStep = SetupStep.ENTER_URL,
-                        errorMessage = "Authentication failed: ${authResult.message}"
+                        errorMessage = result.message
                     )
                 }
             }
@@ -123,94 +116,17 @@ class SetupViewModel @Inject constructor(
     }
 
     /**
-     * Handle OAuth error from WebView.
+     * Retry connection (e.g., after fixing tunnel issues).
      */
-    fun handleAuthError(error: String) {
-        _uiState.value = _uiState.value.copy(
-            isLoading = false,
-            setupStep = SetupStep.ENTER_URL,
-            authUrl = null,
-            errorMessage = "Login failed: $error"
-        )
-    }
-
-    /**
-     * Cancel OAuth flow and return to URL entry.
-     */
-    fun cancelAuth() {
-        _uiState.value = _uiState.value.copy(
-            setupStep = SetupStep.ENTER_URL,
-            authUrl = null,
-            errorMessage = null
-        )
-    }
-
-    /**
-     * Discover the RelayPrint addon and verify connection.
-     * Uses session cookies for panel ingress, or bearer token for API ingress.
-     */
-    private suspend fun discoverAddon(token: String, cookies: String? = null) {
-        val haUrl = settings.haUrl.first()
-
-        when (val discoveryResult = apiFactory.discoverAddon(haUrl, token, cookies)) {
-            is AddonDiscoveryResult.Success -> {
-                // Save the ingress URL and session token (if used)
-                settings.saveIngressUrl(
-                    ingressUrl = discoveryResult.ingressUrl,
-                    sessionToken = discoveryResult.sessionToken,
-                    addonSlug = discoveryResult.addonSlug
-                )
-
-                // Save tunnel URL if available (for remote access)
-                if (!discoveryResult.tunnelUrl.isNullOrEmpty()) {
-                    settings.saveTunnelUrl(
-                        tunnelUrl = discoveryResult.tunnelUrl,
-                        provider = discoveryResult.tunnelProvider ?: "localtunnel"
-                    )
-                }
-
-                settings.setConfigured(true)
-
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    isConnected = true,
-                    serverVersion = discoveryResult.version,
-                    setupStep = SetupStep.COMPLETE,
-                    errorMessage = null
-                )
-            }
-            is AddonDiscoveryResult.Error -> {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    setupStep = SetupStep.DISCOVERING,
-                    errorMessage = discoveryResult.message
-                )
-            }
-        }
-    }
-
-    /**
-     * Retry discovery (e.g., after starting the addon).
-     */
-    fun retryDiscovery() {
+    fun retryConnection() {
         viewModelScope.launch {
-            val token = settings.haToken.first()
-            if (token.isEmpty()) {
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Please log in first",
-                    setupStep = SetupStep.ENTER_URL
-                )
-                return@launch
-            }
-
             _uiState.value = _uiState.value.copy(
                 isLoading = true,
                 errorMessage = null
             )
 
-            // Clear any cached session and re-discover
             apiFactory.clearCache()
-            discoverAddon(token)
+            connect()
         }
     }
 
@@ -228,11 +144,12 @@ class SetupViewModel @Inject constructor(
     }
 
     /**
-     * Reset setup (e.g., to use a different HA instance).
+     * Reset setup (e.g., to use a different tunnel URL).
      */
     fun resetSetup() {
         viewModelScope.launch {
             settings.clearAuth()
+            settings.clearTunnelUrl()
             apiFactory.clearCache()
 
             _uiState.value = SetupUiState()

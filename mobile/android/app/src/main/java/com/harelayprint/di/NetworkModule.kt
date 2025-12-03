@@ -82,7 +82,7 @@ sealed class AddonDiscoveryResult {
 
 /**
  * Factory for creating API clients with dynamic base URLs.
- * Automatically discovers the RelayPrint addon's ingress URL.
+ * Connects to RelayPrint via tunnel URL.
  */
 class ApiClientFactory(
     private val okHttpClient: OkHttpClient,
@@ -90,15 +90,14 @@ class ApiClientFactory(
 ) {
     companion object {
         private const val TAG = "ApiClientFactory"
-        private const val PROBE_TIMEOUT_SECONDS = 5L  // Short timeout for discovery probing
+        private const val PROBE_TIMEOUT_SECONDS = 10L  // Timeout for tunnel probing
     }
 
     private var cachedApi: RelayPrintApi? = null
     private var cachedBaseUrl: String? = null
-    private var cachedIngressUrl: String? = null
-    private var cachedAddonSlug: String? = null
+    private var cachedTunnelUrl: String? = null
 
-    // OkHttpClient with short timeout for discovery probing
+    // OkHttpClient with timeout for tunnel probing
     private val probeClient: OkHttpClient by lazy {
         okHttpClient.newBuilder()
             .connectTimeout(PROBE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -107,156 +106,7 @@ class ApiClientFactory(
     }
 
     /**
-     * Discover the RelayPrint addon.
-     *
-     * Discovery order:
-     * 1. Check for Cloudflare Tunnel URL (best for remote access)
-     * 2. Direct port 7779 on HA host (local network)
-     * 3. Try common local IPs (fallback for remote URLs)
-     *
-     * Note: HA Ingress does NOT work for REST API calls from mobile apps.
-     * Ingress requires session cookies (browser) or Supervisor access (which
-     * OAuth/LLAT tokens don't have). See docs/MOBILE_APP_AUTH.md for details.
-     */
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun discoverAddon(haBaseUrl: String, token: String, cookies: String? = null): AddonDiscoveryResult {
-        val normalizedBase = normalizeUrl(haBaseUrl).trimEnd('/')
-
-        // First, verify the token works by checking HA config
-        try {
-            val supervisorApi = createSupervisorApi(normalizedBase, token)
-            val configResponse = supervisorApi.getConfig()
-            if (configResponse.isSuccessful) {
-                Log.d(TAG, "Token validated - HA version: ${configResponse.body()?.version}")
-            } else {
-                Log.d(TAG, "Token validation failed: ${configResponse.code()}")
-            }
-        } catch (e: Exception) {
-            Log.d(TAG, "Token validation error: ${e.message}")
-        }
-
-        // Extract host from URL for port 7779 access
-        val host = try {
-            java.net.URL(normalizedBase).host
-        } catch (e: Exception) {
-            normalizedBase.removePrefix("https://").removePrefix("http://").split("/")[0]
-        }
-
-        // Pattern 1: Try direct port 7779 (primary method for mobile app)
-        // This requires the addon port to be accessible (local network or tunneled)
-        val directUrls = listOf(
-            "https://$host:7779",  // HTTPS (if behind reverse proxy)
-            "http://$host:7779"    // HTTP (local network)
-        )
-
-        Log.d(TAG, "Trying direct port 7779 access...")
-        for (directUrl in directUrls) {
-            Log.d(TAG, "Trying: $directUrl")
-            val probeResult = probeEndpoint(directUrl, token)
-            if (probeResult is ProbeResult.Success) {
-                Log.d(TAG, "Found RelayPrint at: $directUrl (version: ${probeResult.version})")
-
-                // Check if there's a tunnel URL configured
-                val tunnelInfo = checkForTunnelUrl(directUrl, token)
-                if (tunnelInfo != null) {
-                    Log.d(TAG, "Tunnel URL found (${tunnelInfo.provider}): ${tunnelInfo.url}")
-                    // Verify tunnel URL works
-                    val tunnelProbe = probeEndpoint(tunnelInfo.url, token)
-                    if (tunnelProbe is ProbeResult.Success) {
-                        Log.d(TAG, "Using tunnel for remote access")
-                        cachedIngressUrl = tunnelInfo.url
-                        cachedAddonSlug = "relay_print"
-                        return AddonDiscoveryResult.Success(
-                            ingressUrl = tunnelInfo.url,
-                            addonSlug = "relay_print",
-                            version = tunnelProbe.version,
-                            tunnelUrl = tunnelInfo.url,
-                            tunnelProvider = tunnelInfo.provider
-                        )
-                    }
-                }
-
-                // No tunnel or tunnel failed, use direct URL
-                cachedIngressUrl = directUrl
-                cachedAddonSlug = "relay_print"
-                return AddonDiscoveryResult.Success(
-                    ingressUrl = directUrl,
-                    addonSlug = "relay_print",
-                    version = probeResult.version
-                )
-            }
-            if (probeResult is ProbeResult.Error) {
-                Log.d(TAG, "Direct port failed: ${probeResult.message} (code: ${probeResult.code})")
-            }
-        }
-
-        // Pattern 2: Try common local IPs if the host is a remote URL (Nabu Casa, etc)
-        // This helps when user is on local WiFi but entered their remote URL
-        if (isRemoteUrl(host)) {
-            Log.d(TAG, "Remote URL detected, trying common local IPs...")
-            val localIps = listOf(
-                "192.168.1.1", "192.168.0.1", "192.168.1.100",
-                "10.0.0.1", "homeassistant.local"
-            )
-            for (localIp in localIps) {
-                val localUrl = "http://$localIp:7779"
-                Log.d(TAG, "Trying local: $localUrl")
-                val probeResult = probeEndpoint(localUrl, token)
-                if (probeResult is ProbeResult.Success) {
-                    Log.d(TAG, "Found RelayPrint at local IP: $localUrl")
-
-                    // Check for tunnel URL
-                    val tunnelInfo = checkForTunnelUrl(localUrl, token)
-                    if (tunnelInfo != null) {
-                        Log.d(TAG, "Tunnel URL found (${tunnelInfo.provider}): ${tunnelInfo.url} - saving for remote access")
-                        // Store tunnel URL but return local for now (faster)
-                        // App can switch to tunnel when on mobile data
-                        cachedIngressUrl = localUrl
-                        cachedAddonSlug = "relay_print"
-                        return AddonDiscoveryResult.Success(
-                            ingressUrl = localUrl,
-                            addonSlug = "relay_print",
-                            version = probeResult.version,
-                            tunnelUrl = tunnelInfo.url,
-                            tunnelProvider = tunnelInfo.provider
-                        )
-                    }
-
-                    cachedIngressUrl = localUrl
-                    cachedAddonSlug = "relay_print"
-                    return AddonDiscoveryResult.Success(
-                        ingressUrl = localUrl,
-                        addonSlug = "relay_print",
-                        version = probeResult.version
-                    )
-                }
-            }
-        }
-
-        // Nothing worked - provide helpful error with setup instructions
-        val isNabuCasa = host.contains("nabu.casa") || host.contains("ui.nabu.casa")
-        val errorMessage = if (isNabuCasa) {
-            "Cannot reach RelayPrint addon remotely.\n\n" +
-            "Nabu Casa only proxies Home Assistant (port 8123), not addon APIs.\n\n" +
-            "Options:\n" +
-            "1. Connect to your home WiFi\n" +
-            "2. Enable Cloudflare Tunnel in RelayPrint addon settings\n" +
-            "3. Use VPN to access your home network\n\n" +
-            "See docs/MOBILE_APP_AUTH.md for setup guide."
-        } else {
-            "Cannot reach RelayPrint addon.\n\n" +
-            "Please ensure:\n" +
-            "1. The addon is installed and running\n" +
-            "2. Port 7779 is accessible from your network\n" +
-            "3. If remote: enable Cloudflare Tunnel in addon settings\n\n" +
-            "For local access, connect to your home WiFi."
-        }
-
-        return AddonDiscoveryResult.Error(errorMessage, 0)
-    }
-
-    /**
-     * Result of tunnel URL check.
+     * Result of tunnel URL fetch.
      */
     data class TunnelInfo(
         val url: String,
@@ -264,13 +114,59 @@ class ApiClientFactory(
     )
 
     /**
-     * Check if the addon has a tunnel URL configured.
-     * Returns the tunnel URL and provider if tunnel is enabled AND active.
+     * Connect to RelayPrint using the provided tunnel URL.
+     *
+     * The user enters the tunnel URL from the RelayPrint dashboard.
+     * This is the simplest and most reliable approach since:
+     * - No complex auto-discovery needed
+     * - Works from anywhere (no local network required)
+     * - User can see and verify the URL
      */
-    private suspend fun checkForTunnelUrl(baseUrl: String, token: String): TunnelInfo? {
+    @Suppress("UNUSED_PARAMETER")
+    suspend fun discoverAddon(tunnelUrl: String, token: String, cookies: String? = null): AddonDiscoveryResult {
+        val normalizedUrl = normalizeUrl(tunnelUrl).trimEnd('/')
+        Log.d(TAG, "Connecting to RelayPrint at: $normalizedUrl")
+
+        // Verify the tunnel URL works by calling the health endpoint
+        val probeResult = probeEndpoint(normalizedUrl, token)
+        return when (probeResult) {
+            is ProbeResult.Success -> {
+                Log.d(TAG, "Connected to RelayPrint - version: ${probeResult.version}")
+                cachedTunnelUrl = normalizedUrl
+
+                // Try to get provider info from remote config
+                val provider = getProviderInfo(normalizedUrl, token)
+
+                AddonDiscoveryResult.Success(
+                    ingressUrl = normalizedUrl,
+                    addonSlug = "relay_print",
+                    version = probeResult.version,
+                    tunnelUrl = normalizedUrl,
+                    tunnelProvider = provider
+                )
+            }
+            is ProbeResult.Error -> {
+                Log.e(TAG, "Connection failed: ${probeResult.message}")
+                AddonDiscoveryResult.Error(
+                    "Cannot connect to RelayPrint.\n\n" +
+                    "Error: ${probeResult.message}\n\n" +
+                    "Please check:\n" +
+                    "1. The tunnel URL is correct\n" +
+                    "2. The RelayPrint addon is running\n" +
+                    "3. Remote access is enabled in the addon",
+                    probeResult.code
+                )
+            }
+        }
+    }
+
+    /**
+     * Get the tunnel provider from remote config endpoint.
+     */
+    private suspend fun getProviderInfo(baseUrl: String, token: String): String {
         return try {
             val configUrl = normalizeUrl(baseUrl) + "api/config/remote"
-            Log.d(TAG, "Checking for tunnel URL at: $configUrl")
+            Log.d(TAG, "Fetching provider info from: $configUrl")
 
             val request = okhttp3.Request.Builder()
                 .url(configUrl)
@@ -281,51 +177,21 @@ class ApiClientFactory(
                 val response = probeClient.newCall(request).execute()
                 if (response.isSuccessful) {
                     val body = response.body?.string()
-                    if (body != null && body.contains("tunnel_url")) {
+                    if (body != null && body.contains("tunnel_provider")) {
                         val remoteConfig = json.decodeFromString<com.harelayprint.data.api.RemoteConfigResponse>(body)
-                        // Check both enabled AND active (tunnel process is running)
-                        if (remoteConfig.tunnelActive && !remoteConfig.tunnelUrl.isNullOrEmpty()) {
-                            Log.d(TAG, "Tunnel active (provider: ${remoteConfig.tunnelProvider}): ${remoteConfig.tunnelUrl}")
-                            TunnelInfo(remoteConfig.tunnelUrl, remoteConfig.tunnelProvider)
-                        } else if (remoteConfig.tunnelEnabled && remoteConfig.tunnelUrl.isNullOrEmpty()) {
-                            Log.d(TAG, "Tunnel enabled but URL not yet available (starting?)")
-                            null
-                        } else {
-                            Log.d(TAG, "Tunnel not active or not configured")
-                            null
-                        }
+                        remoteConfig.tunnelProvider
                     } else {
-                        null
+                        "unknown"
                     }
                 } else {
-                    null
+                    "unknown"
                 }
             }
         } catch (e: Exception) {
-            Log.d(TAG, "Failed to check tunnel URL: ${e.message}")
-            null
+            Log.d(TAG, "Failed to get provider info: ${e.message}")
+            "unknown"
         }
     }
-
-    /**
-     * Check if URL appears to be a remote/cloud URL (not local network)
-     */
-    private fun isRemoteUrl(host: String): Boolean {
-        return host.contains("nabu.casa") ||
-               host.contains("duckdns.org") ||
-               host.contains(".com") ||
-               host.contains(".net") ||
-               host.contains(".org") ||
-               (!host.startsWith("192.168.") &&
-                !host.startsWith("10.") &&
-                !host.startsWith("172.") &&
-                !host.contains("localhost") &&
-                !host.contains(".local"))
-    }
-
-    // Note: Ingress session API (POST /api/hassio/ingress/session) requires
-    // Supervisor-level access which OAuth/LLAT tokens don't have.
-    // We use direct port 7779 access instead. See docs/MOBILE_APP_AUTH.md.
 
     private sealed class ProbeResult {
         data class Success(val version: String) : ProbeResult()
@@ -392,29 +258,19 @@ class ApiClientFactory(
         }
     }
 
-    // Note: Cookie-based and no-auth probing removed.
-    // Direct port 7779 uses Bearer token auth. See docs/MOBILE_APP_AUTH.md.
-
-    // Note: Supervisor API (listAddons, getAddonInfo) requires Supervisor-level access
-    // which OAuth/LLAT tokens don't have. We use direct port 7779 instead.
-
     /**
-     * Create the RelayPrint API client.
-     *
-     * For direct port 7779 access, we use Bearer token authentication.
-     * The addon validates tokens against Home Assistant's API.
+     * Create the RelayPrint API client for the given tunnel URL.
      */
     @Suppress("UNUSED_PARAMETER")
-    fun createApi(baseUrl: String, token: String, cookies: String? = null): RelayPrintApi {
-        // Use cached URL if available, otherwise use baseUrl directly
-        val effectiveUrl = cachedIngressUrl ?: baseUrl
+    fun createApi(tunnelUrl: String, token: String, cookies: String? = null): RelayPrintApi {
+        val effectiveUrl = cachedTunnelUrl ?: tunnelUrl
 
         // Return cached API if URL hasn't changed
         if (cachedApi != null && cachedBaseUrl == effectiveUrl) {
             return cachedApi!!
         }
 
-        Log.d(TAG, "Creating API with bearer token for: $effectiveUrl")
+        Log.d(TAG, "Creating API for tunnel: $effectiveUrl")
         val client = createAuthenticatedClient(token)
 
         val retrofit = Retrofit.Builder()
@@ -429,24 +285,12 @@ class ApiClientFactory(
     }
 
     /**
-     * Create API with explicit URL (after discovery or manual entry).
+     * Create API with explicit tunnel URL.
      */
     @Suppress("UNUSED_PARAMETER")
-    fun createApiWithIngress(haBaseUrl: String, ingressUrl: String, token: String): RelayPrintApi {
-        cachedIngressUrl = ingressUrl
-        return createApi(ingressUrl, token)
-    }
-
-    private fun createSupervisorApi(baseUrl: String, token: String): HaSupervisorApi {
-        val authClient = createAuthenticatedClient(token)
-
-        val retrofit = Retrofit.Builder()
-            .baseUrl(normalizeUrl(baseUrl))
-            .client(authClient)
-            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-            .build()
-
-        return retrofit.create(HaSupervisorApi::class.java)
+    fun createApiWithIngress(haBaseUrl: String, tunnelUrl: String, token: String): RelayPrintApi {
+        cachedTunnelUrl = tunnelUrl
+        return createApi(tunnelUrl, token)
     }
 
     private fun createAuthenticatedClient(token: String): OkHttpClient {
@@ -467,14 +311,13 @@ class ApiClientFactory(
     fun clearCache() {
         cachedApi = null
         cachedBaseUrl = null
-        cachedIngressUrl = null
-        cachedAddonSlug = null
+        cachedTunnelUrl = null
     }
 
     private fun normalizeUrl(url: String): String {
         var normalized = url.trim()
         if (!normalized.startsWith("http://") && !normalized.startsWith("https://")) {
-            normalized = "http://$normalized"
+            normalized = "https://$normalized"  // Default to HTTPS for tunnel URLs
         }
         if (!normalized.endsWith("/")) {
             normalized = "$normalized/"

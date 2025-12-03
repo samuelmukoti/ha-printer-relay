@@ -64,6 +64,27 @@ def is_ingress_request():
     return request.headers.get('X-Ingress-Path') is not None
 
 
+def is_tunnel_enabled():
+    """Check if tunnel access is enabled in configuration."""
+    try:
+        # Check for tunnel config file
+        tunnel_config_path = '/data/tunnel/tunnel_config.json'
+        if os.path.exists(tunnel_config_path):
+            with open(tunnel_config_path) as f:
+                config = json.load(f)
+                return config.get('enabled', False)
+
+        # Fallback: check for running tunnel URL file
+        tunnel_url_path = '/data/tunnel/tunnel_url.txt'
+        if os.path.exists(tunnel_url_path):
+            return True
+
+        return False
+    except Exception as e:
+        logger.debug(f"Error checking tunnel config: {e}")
+        return False
+
+
 def validate_ha_token(token):
     """Validate a Home Assistant access token by calling HA API."""
     try:
@@ -91,11 +112,20 @@ def require_auth(f):
     Allows requests that either:
     1. Come through HA Ingress (X-Ingress-Path header present)
     2. Have a valid Bearer token in Authorization header
+    3. Tunnel access is enabled (tunnel URL acts as a secret)
+
+    When tunnel is enabled, all requests are allowed since the tunnel URL
+    is only known to users who have access to the HA dashboard.
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
         # Ingress requests are pre-authenticated by HA
         if is_ingress_request():
+            return f(*args, **kwargs)
+
+        # If tunnel is enabled, allow all requests
+        # The tunnel URL itself acts as a secret - only people with HA access know it
+        if is_tunnel_enabled():
             return f(*args, **kwargs)
 
         # Check for Bearer token
