@@ -39,12 +39,14 @@ docker build -t printer-relay .
 
 ## Architecture
 
-### Service Orchestration (`run.sh`)
-The add-on starts services in order:
-1. **D-Bus daemon** - Required for Avahi
-2. **CUPS daemon** (`cupsd -f`) - Print system backend on port 631
-3. **Avahi daemon** - mDNS/DNS-SD for printer discovery
-4. **Flask API server** (`print_api.py`) - REST API on port 7779
+### Service Orchestration (s6-overlay v3)
+The add-on uses s6-overlay v3 for service management with proper dependencies:
+1. **D-Bus daemon** - Base service, required for Avahi
+2. **CUPS daemon** (`cupsd -f`) - Print system backend on port 631, depends on dbus
+3. **Avahi daemon** - mDNS/DNS-SD for printer discovery, depends on dbus
+4. **Flask API server** (`print_api.py`) - REST API on port 7779, depends on dbus, avahi, and cupsd
+
+Services are defined in `/etc/s6-overlay/s6-rc.d/` with proper dependencies ensuring correct startup order.
 
 ### Authentication Strategy
 **Home Assistant Ingress handles all authentication** - the add-on trusts requests coming through Ingress since HA has already authenticated the user. For mobile app access, use HA's long-lived access tokens.
@@ -78,16 +80,22 @@ All endpoints are protected by Home Assistant Ingress authentication.
 ### Initialization Scripts (`rootfs/etc/cont-init.d/`)
 | Script | Purpose |
 |--------|---------|
-| `01-persistent-storage.sh` | Creates directories, symlinks for CUPS persistence |
-| `02-cups-config.sh` | Generates CUPS config from add-on options |
+| `10-setup-cups.sh` | Creates directories, symlinks for CUPS persistence, generates CUPS config from add-on options |
+| `20-app-dirs.sh` | Creates application directories for print jobs and API data |
 
 ### File System Layout
 ```
 rootfs/
-├── usr/local/bin/     # Python services
-├── etc/cups/          # CUPS configuration
-├── etc/avahi/         # Avahi/mDNS configuration
-└── etc/cont-init.d/   # Container initialization scripts
+├── usr/local/bin/           # Python services
+├── etc/cups/                # CUPS configuration
+├── etc/avahi/               # Avahi/mDNS configuration
+├── etc/cont-init.d/         # Container initialization scripts
+└── etc/s6-overlay/s6-rc.d/  # s6-overlay v3 service definitions
+    ├── dbus/                # D-Bus service
+    ├── avahi/               # Avahi service (depends on dbus)
+    ├── cupsd/               # CUPS service (depends on dbus)
+    ├── relayprint/          # API service (depends on dbus, avahi, cupsd)
+    └── user/                # User bundle containing all services
 ```
 
 ## Testing Approach
