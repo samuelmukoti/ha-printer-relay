@@ -1327,6 +1327,133 @@ body {
   background: var(--text-disabled);
 }
 
+/* Quick Tunnel Card */
+.quick-tunnel-card {
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius-sm);
+  padding: 20px;
+  border: 1px solid var(--divider-color);
+}
+
+.quick-tunnel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.quick-tunnel-info {
+  flex: 1;
+}
+
+.quick-tunnel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.quick-tunnel-title svg {
+  fill: var(--primary-color);
+}
+
+.quick-tunnel-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* Tunnel URL Display */
+.tunnel-url-display {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--divider-color);
+}
+
+.tunnel-url-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.tunnel-url-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-main);
+  padding: 12px 16px;
+  border-radius: var(--border-radius-sm);
+  border: 1px solid var(--primary-color);
+}
+
+.tunnel-url-box code {
+  flex: 1;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 14px;
+  color: var(--primary-light);
+  word-break: break-all;
+}
+
+.tunnel-url-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-disabled);
+}
+
+.tunnel-url-hint svg {
+  fill: var(--text-disabled);
+  flex-shrink: 0;
+}
+
+/* Status dot states */
+.status-dot.starting {
+  background: var(--warning-color);
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Advanced section styling */
+.advanced-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.setup-link {
+  margin-top: 16px;
+}
+
+.setup-link a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--primary-color);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.setup-link a:hover {
+  text-decoration: underline;
+}
+
+.setup-link svg {
+  fill: currentColor;
+}
+
 /* About Section */
 .about-info {
   display: flex;

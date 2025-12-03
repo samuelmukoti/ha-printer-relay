@@ -2,10 +2,13 @@
 # ==============================================================================
 # Cloudflare Tunnel Setup
 # 
-# Configures cloudflared to create a secure tunnel for remote mobile app access.
+# Supports two modes:
+# 1. Quick Tunnel (default): Zero config, auto-generated URL - no account needed!
+# 2. Named Tunnel: Custom domain with Cloudflare account and token
+#
 # Configuration can come from:
-# 1. Dashboard UI (saved to /data/cloudflare_config.json) - takes precedence
-# 2. Addon options (config.yaml / options.json)
+# - Dashboard UI (saved to /data/cloudflare_config.json) - takes precedence
+# - Addon options (config.yaml / options.json)
 # ==============================================================================
 
 set -e
@@ -16,6 +19,7 @@ DASHBOARD_CONFIG=/data/cloudflare_config.json
 # Initialize variables
 TUNNEL_ENABLED=false
 TUNNEL_TOKEN=""
+TUNNEL_MODE="quick"
 
 # Check dashboard config first (takes precedence)
 if [ -f "$DASHBOARD_CONFIG" ]; then
@@ -25,6 +29,7 @@ if [ -f "$DASHBOARD_CONFIG" ]; then
     if command -v jq &> /dev/null; then
         TUNNEL_ENABLED=$(jq -r '.enabled // false' "$DASHBOARD_CONFIG")
         TUNNEL_TOKEN=$(jq -r '.tunnel_token // ""' "$DASHBOARD_CONFIG")
+        TUNNEL_MODE=$(jq -r '.mode // "quick"' "$DASHBOARD_CONFIG")
     else
         # Fallback: basic parsing
         if grep -q '"enabled": true' "$DASHBOARD_CONFIG" 2>/dev/null; then
@@ -39,48 +44,49 @@ if [ "$TUNNEL_ENABLED" != "true" ]; then
     if bashio::config.true 'cloudflare.enabled'; then
         bashio::log.info "Reading Cloudflare config from addon options..."
         TUNNEL_ENABLED=true
-        TUNNEL_TOKEN=$(bashio::config 'cloudflare.tunnel_token')
+        TUNNEL_TOKEN=$(bashio::config 'cloudflare.tunnel_token' || echo "")
     fi
 fi
 
+# Auto-detect mode based on token
+if [ -n "$TUNNEL_TOKEN" ] && [ "$TUNNEL_TOKEN" != "null" ] && [ "$TUNNEL_TOKEN" != "" ]; then
+    TUNNEL_MODE="named"
+else
+    TUNNEL_MODE="quick"
+fi
+
+# Create config directory
+mkdir -p "$TUNNEL_CONFIG_DIR"
+
 # Process configuration
 if [ "$TUNNEL_ENABLED" = "true" ]; then
-    bashio::log.info "Cloudflare Tunnel is enabled"
+    bashio::log.info "Cloudflare Tunnel is enabled (mode: $TUNNEL_MODE)"
     
-    if [ -z "$TUNNEL_TOKEN" ]; then
-        bashio::log.warning "Cloudflare Tunnel enabled but no token provided!"
-        bashio::log.warning "Configure via: Dashboard UI (Settings tab) or addon Configuration"
-        bashio::log.info ""
-        bashio::log.info "To set up Cloudflare Tunnel:"
-        bashio::log.info "1. Go to https://one.dash.cloudflare.com/"
-        bashio::log.info "2. Navigate to Access → Tunnels"
-        bashio::log.info "3. Create a new tunnel named 'relayprint'"
-        bashio::log.info "4. In Public Hostname, add:"
-        bashio::log.info "   - Subdomain: relayprint (or your choice)"
-        bashio::log.info "   - Domain: yourdomain.com"
-        bashio::log.info "   - Service: HTTP://localhost:7779"
-        bashio::log.info "5. Copy the tunnel token and paste in Settings"
-        bashio::log.info ""
-        # Remove enabled marker since token is missing
-        rm -f "$TUNNEL_CONFIG_DIR/enabled" 2>/dev/null || true
-        exit 0
+    if [ "$TUNNEL_MODE" = "named" ]; then
+        # Named Tunnel mode - requires token
+        bashio::log.info "Using Named Tunnel with custom domain"
+        
+        # Store the token for the service to use
+        echo "$TUNNEL_TOKEN" > "$TUNNEL_CONFIG_DIR/tunnel_token"
+        chmod 600 "$TUNNEL_CONFIG_DIR/tunnel_token"
+    else
+        # Quick Tunnel mode - no token needed!
+        bashio::log.info "Using Quick Tunnel (zero configuration mode)"
+        bashio::log.info "A temporary public URL will be auto-generated"
+        
+        # Remove any existing token file for quick mode
+        rm -f "$TUNNEL_CONFIG_DIR/tunnel_token" 2>/dev/null || true
     fi
     
-    # Create config directory
-    mkdir -p "$TUNNEL_CONFIG_DIR"
-    
-    # Store the token for the service to use
-    echo "$TUNNEL_TOKEN" > "$TUNNEL_CONFIG_DIR/tunnel_token"
-    chmod 600 "$TUNNEL_CONFIG_DIR/tunnel_token"
-    
-    # Create a marker file to indicate tunnel is configured
+    # Create a marker file to indicate tunnel is enabled
     touch "$TUNNEL_CONFIG_DIR/enabled"
     
     bashio::log.info "Cloudflare Tunnel configured successfully"
     bashio::log.info "The tunnel will start with the cloudflared service"
 else
     bashio::log.info "Cloudflare Tunnel is disabled"
-    # Remove enabled marker if it exists
+    # Remove enabled marker and token if they exist
     rm -f "$TUNNEL_CONFIG_DIR/enabled" 2>/dev/null || true
+    rm -f "$TUNNEL_CONFIG_DIR/tunnel_url.txt" 2>/dev/null || true
 fi
 

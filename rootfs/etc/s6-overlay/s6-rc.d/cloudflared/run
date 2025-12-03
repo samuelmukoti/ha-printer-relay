@@ -2,36 +2,82 @@
 # ==============================================================================
 # Cloudflare Tunnel Service
 #
-# Runs cloudflared to create a secure tunnel for remote access to the RelayPrint API.
-# Only runs if the tunnel is configured (token provided in addon settings).
+# Supports two modes:
+# 1. Quick Tunnel (default): Zero config, auto-generated URL
+# 2. Named Tunnel: Custom domain with Cloudflare account
+#
+# Quick Tunnel is the default - just enable and go!
 # ==============================================================================
 
 TUNNEL_CONFIG_DIR=/data/cloudflare
+TUNNEL_URL_FILE=/data/cloudflare/tunnel_url.txt
+CLOUDFLARE_CONFIG=/data/cloudflare_config.json
 
-# Check if tunnel is enabled and configured
+# Check if tunnel is enabled
 if [ ! -f "$TUNNEL_CONFIG_DIR/enabled" ]; then
     bashio::log.info "Cloudflare Tunnel not enabled, service sleeping..."
-    # Sleep indefinitely but allow the service to be restarted if config changes
     exec sleep infinity
 fi
 
-if [ ! -f "$TUNNEL_CONFIG_DIR/tunnel_token" ]; then
-    bashio::log.error "Tunnel enabled but token file missing!"
-    exec sleep infinity
+# Determine tunnel mode
+TUNNEL_MODE="quick"  # Default to quick tunnel
+TUNNEL_TOKEN=""
+
+# Check for named tunnel token
+if [ -f "$TUNNEL_CONFIG_DIR/tunnel_token" ]; then
+    TUNNEL_TOKEN=$(cat "$TUNNEL_CONFIG_DIR/tunnel_token" | tr -d '[:space:]')
+    if [ -n "$TUNNEL_TOKEN" ] && [ "$TUNNEL_TOKEN" != "" ]; then
+        TUNNEL_MODE="named"
+    fi
 fi
 
-# Read the tunnel token
-TUNNEL_TOKEN=$(cat "$TUNNEL_CONFIG_DIR/tunnel_token")
+mkdir -p "$TUNNEL_CONFIG_DIR"
 
-if [ -z "$TUNNEL_TOKEN" ]; then
-    bashio::log.error "Tunnel token is empty!"
-    exec sleep infinity
+if [ "$TUNNEL_MODE" = "named" ]; then
+    # ========================================
+    # Named Tunnel Mode (with token/custom domain)
+    # ========================================
+    bashio::log.info "Starting Cloudflare Named Tunnel..."
+    bashio::log.info "Using configured tunnel token for custom domain"
+    
+    exec /usr/local/bin/cloudflared tunnel run --token "$TUNNEL_TOKEN"
+else
+    # ========================================
+    # Quick Tunnel Mode (zero config)
+    # ========================================
+    bashio::log.info "Starting Cloudflare Quick Tunnel..."
+    bashio::log.info "Generating temporary public URL (no account required)"
+    
+    # Clear previous URL
+    rm -f "$TUNNEL_URL_FILE"
+    
+    # Run cloudflared and capture the URL from output
+    # Quick tunnel outputs URL to stderr like: "INF |  https://xxx.trycloudflare.com"
+    /usr/local/bin/cloudflared tunnel --url http://localhost:7779 --no-autoupdate 2>&1 | while IFS= read -r line; do
+        echo "$line"
+        
+        # Capture the tunnel URL when it appears
+        if echo "$line" | grep -q "trycloudflare.com"; then
+            # Extract URL from the line
+            URL=$(echo "$line" | grep -oE 'https://[a-zA-Z0-9-]+\.trycloudflare\.com')
+            if [ -n "$URL" ]; then
+                echo "$URL" > "$TUNNEL_URL_FILE"
+                bashio::log.info "=============================================="
+                bashio::log.info "🌐 REMOTE ACCESS URL: $URL"
+                bashio::log.info "=============================================="
+                bashio::log.info "Mobile app can now connect from anywhere!"
+                
+                # Also update the config file with the URL
+                if [ -f "$CLOUDFLARE_CONFIG" ]; then
+                    # Update existing config with new URL
+                    TMP_FILE=$(mktemp)
+                    jq --arg url "$URL" '.tunnel_url = $url' "$CLOUDFLARE_CONFIG" > "$TMP_FILE" 2>/dev/null && mv "$TMP_FILE" "$CLOUDFLARE_CONFIG"
+                else
+                    # Create config with URL
+                    echo "{\"enabled\": true, \"tunnel_url\": \"$URL\", \"mode\": \"quick\"}" > "$CLOUDFLARE_CONFIG"
+                fi
+            fi
+        fi
+    done
 fi
-
-bashio::log.info "Starting Cloudflare Tunnel..."
-bashio::log.info "Your RelayPrint API will be accessible via your configured Cloudflare hostname"
-
-# Run cloudflared with the tunnel token
-# The token contains all the configuration (tunnel ID, credentials, etc.)
-exec /usr/local/bin/cloudflared tunnel run --token "$TUNNEL_TOKEN"
 
