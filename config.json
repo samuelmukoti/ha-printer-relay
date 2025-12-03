@@ -1,6 +1,6 @@
 {
   "name": "RelayPrint",
-  "version": "0.1.21f",
+  "version": "0.1.21g",
   "slug": "relay_print",
   "description": "Home Assistant add-on to replace Google Cloud Print with local and remote printing capabilities.",
   "url": "https://github.com/samuelmukoti/ha-printer-relay",
@@ -68,10 +68,10 @@
       "max_jobs": "int(10,1000)"
     },
     "tunnel": {
-      "enabled": "bool",
-      "provider": "list(localtunnel|cloudflare_quick|cloudflare_named)?",
+      "enabled": "bool?",
+      "provider": "str?",
       "tunnel_token": "str?",
-      "tunnel_url": "url?"
+      "tunnel_url": "str?"
     }
   }
 }
