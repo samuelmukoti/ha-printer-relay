@@ -35,4 +35,9 @@ COPY rootfs/ /
 
 # Remove old services.d if exists and set permissions
 RUN rm -rf /etc/services.d && \
-    chmod +x /etc/s6-overlay/s6-rc.d/relayprint/run
+    chmod +x /etc/s6-overlay/s6-rc.d/relayprint/run && \
+    # Fix /init permissions - required for s6-overlay to start
+    if [ -f /init ]; then chmod +x /init; fi && \
+    # Ensure all s6-overlay scripts are executable
+    find /etc/s6-overlay -type f -name "run" -exec chmod +x {} \; && \
+    find /etc/s6-overlay -type f -name "finish" -exec chmod +x {} \; 2>/dev/null || true
