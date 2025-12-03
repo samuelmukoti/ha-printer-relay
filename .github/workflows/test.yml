@@ -30,7 +30,7 @@ jobs:
 
     - name: Run unit tests
       run: |
-        python -m pytest tests/test_*.py -v --cov=. --cov-report=xml
+        python -m pytest tests/ -v --cov=. --cov-report=xml --ignore=tests/test_avahi_integration.py --ignore=tests/test_cups_integration.py
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3

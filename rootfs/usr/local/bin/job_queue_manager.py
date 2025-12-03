@@ -135,5 +135,21 @@ class JobQueueManager:
             "failed_jobs": len([j for j in self.jobs.values() if j.status in ["aborted", "canceled"]])
         }
 
-# Global instance for use by other modules
-queue_manager = JobQueueManager() 
+# Lazy-loaded global instance for use by other modules
+# This avoids creating a CUPS connection at import time, which fails in test environments
+_queue_manager = None
+
+def get_queue_manager() -> JobQueueManager:
+    """Get or create the global JobQueueManager instance."""
+    global _queue_manager
+    if _queue_manager is None:
+        _queue_manager = JobQueueManager()
+    return _queue_manager
+
+# For backwards compatibility - but prefer get_queue_manager()
+class _LazyQueueManager:
+    """Lazy proxy that delays JobQueueManager creation until first use."""
+    def __getattr__(self, name):
+        return getattr(get_queue_manager(), name)
+
+queue_manager = _LazyQueueManager() 
