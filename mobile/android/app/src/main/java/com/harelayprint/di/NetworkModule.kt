@@ -190,14 +190,23 @@ class ApiClientFactory(
             Log.d(TAG, "Supervisor API approach failed: ${e.message}")
         }
 
-        // Nothing worked
-        return AddonDiscoveryResult.Error(
+        // Nothing worked - provide more helpful error
+        val isLikelyRemote = normalizedBase.let { url ->
+            !url.contains("192.168.") && !url.contains("10.") && !url.contains("172.") && !url.contains("localhost")
+        }
+
+        val errorMessage = if (isLikelyRemote) {
+            "Could not connect to RelayPrint addon remotely.\n\n" +
+            "Remote access requires port 7779 to be forwarded on your router, or use the local IP address when on your home network.\n\n" +
+            "Alternative: Connect to your home WiFi and use the local Home Assistant address (e.g., http://192.168.x.x:8123)"
+        } else {
             "Could not find RelayPrint addon. Please ensure:\n" +
             "1. The addon is installed and running\n" +
-            "2. Your Home Assistant URL is correct\n" +
-            "3. Your access token is valid",
-            404
-        )
+            "2. You are on the same network as Home Assistant\n" +
+            "3. Port 7779 is accessible"
+        }
+
+        return AddonDiscoveryResult.Error(errorMessage, 404)
     }
 
     /**
