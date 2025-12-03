@@ -8,14 +8,14 @@
     <string name="setup_welcome">Connect your app to the RelayPrint add-on running on your Home Assistant server.</string>
     <string name="setup_url_label">Home Assistant URL</string>
     <string name="setup_url_hint">https://homeassistant.local:8123</string>
-    <string name="setup_token_label">Long-Lived Access Token</string>
-    <string name="setup_token_hint">Paste your token here</string>
-    <string name="setup_token_optional">Optional - required for remote access, not needed on local network</string>
-    <string name="setup_test_connection">Test Connection</string>
+    <string name="setup_login">Login with Home Assistant</string>
     <string name="setup_continue">Continue</string>
     <string name="setup_connection_success">Connected successfully!</string>
-    <string name="setup_token_help_title">Getting an Access Token</string>
-    <string name="setup_token_help_body">1. Open Home Assistant\n2. Click your profile (bottom left)\n3. Scroll to \"Long-Lived Access Tokens\"\n4. Create a new token and copy it\n\nNote: Token is only needed for remote access. Local network connections may work without it.</string>
+    <string name="setup_authenticating">Authenticating…</string>
+    <string name="setup_discovering">Finding RelayPrint add-on…</string>
+    <string name="setup_auth_hint">You will be redirected to Home Assistant to log in with your account.</string>
+    <string name="setup_retry_discovery">Retry Discovery</string>
+    <string name="setup_reset">Start Over</string>
 
     <!-- Dashboard -->
     <string name="dashboard_title">Dashboard</string>

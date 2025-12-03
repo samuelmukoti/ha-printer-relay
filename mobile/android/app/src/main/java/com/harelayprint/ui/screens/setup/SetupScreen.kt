@@ -6,21 +6,18 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.harelayprint.R
+import com.harelayprint.ui.viewmodel.SetupStep
 import com.harelayprint.ui.viewmodel.SetupViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -30,8 +27,23 @@ fun SetupScreen(
     viewModel: SetupViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var showTokenHelp by remember { mutableStateOf(false) }
-    var showToken by remember { mutableStateOf(false) }
+
+    // Show WebView OAuth screen when authenticating
+    if (uiState.setupStep == SetupStep.AUTHENTICATE && uiState.authUrl != null) {
+        OAuthWebViewScreen(
+            authUrl = uiState.authUrl!!,
+            onAuthCodeReceived = { code ->
+                viewModel.handleAuthCode(code)
+            },
+            onError = { error ->
+                viewModel.handleAuthError(error)
+            },
+            onCancel = {
+                viewModel.cancelAuth()
+            }
+        )
+        return
+    }
 
     Scaffold(
         topBar = {
@@ -58,148 +70,179 @@ fun SetupScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // URL Field
-            OutlinedTextField(
-                value = uiState.haUrl,
-                onValueChange = viewModel::updateUrl,
-                label = { Text(stringResource(R.string.setup_url_label)) },
-                placeholder = { Text(stringResource(R.string.setup_url_hint)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !uiState.isLoading
-            )
+            when (uiState.setupStep) {
+                SetupStep.ENTER_URL -> {
+                    // URL Field
+                    OutlinedTextField(
+                        value = uiState.haUrl,
+                        onValueChange = viewModel::updateUrl,
+                        label = { Text(stringResource(R.string.setup_url_label)) },
+                        placeholder = { Text(stringResource(R.string.setup_url_hint)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !uiState.isLoading
+                    )
 
-            // Token Field with visibility toggle
-            OutlinedTextField(
-                value = uiState.haToken,
-                onValueChange = viewModel::updateToken,
-                label = { Text(stringResource(R.string.setup_token_label)) },
-                placeholder = { Text(stringResource(R.string.setup_token_hint)) },
-                singleLine = true,
-                visualTransformation = if (showToken) VisualTransformation.None else PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                trailingIcon = {
-                    Row {
-                        IconButton(onClick = { showToken = !showToken }) {
-                            Icon(
-                                imageVector = if (showToken) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = if (showToken) "Hide token" else "Show token"
-                            )
-                        }
-                        IconButton(onClick = { showTokenHelp = true }) {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = "Token help"
+                    // Hint about OAuth login
+                    Text(
+                        text = stringResource(R.string.setup_auth_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    // Error message
+                    uiState.errorMessage?.let { error ->
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = error,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.padding(16.dp)
                             )
                         }
                     }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !uiState.isLoading
-            )
 
-            // Optional token note
-            Text(
-                text = stringResource(R.string.setup_token_optional),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+                    Spacer(modifier = Modifier.weight(1f))
 
-            // Error message
-            uiState.errorMessage?.let { error ->
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = error,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
-            }
-
-            // Connection status
-            if (uiState.isConnected) {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    // Login button
+                    Button(
+                        onClick = { viewModel.startLogin() },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = uiState.haUrl.isNotBlank() && !uiState.isLoading
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
+                        Text(stringResource(R.string.setup_login))
+                    }
+                }
+
+                SetupStep.AUTHENTICATE -> {
+                    // This shouldn't show since we return early for WebView
+                    // But keeping as fallback
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        CircularProgressIndicator()
+                        Text(
+                            text = stringResource(R.string.setup_authenticating),
+                            style = MaterialTheme.typography.bodyLarge
                         )
-                        Column {
-                            Text(
-                                text = stringResource(R.string.setup_connection_success),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                            uiState.serverVersion?.let { version ->
+                    }
+                }
+
+                SetupStep.DISCOVERING -> {
+                    // Finding addon
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        if (uiState.isLoading) {
+                            CircularProgressIndicator()
+                        }
+                        Text(
+                            text = stringResource(R.string.setup_discovering),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+
+                        // Error message during discovery
+                        uiState.errorMessage?.let { error ->
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
                                 Text(
-                                    text = "Server version: $version",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                    text = error,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.padding(16.dp)
                                 )
                             }
                         }
                     }
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    // Retry and Reset buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = viewModel::resetSetup,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(stringResource(R.string.setup_reset))
+                        }
+
+                        Button(
+                            onClick = viewModel::retryDiscovery,
+                            modifier = Modifier.weight(1f),
+                            enabled = !uiState.isLoading
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(stringResource(R.string.setup_retry_discovery))
+                        }
+                    }
                 }
-            }
 
-            Spacer(modifier = Modifier.weight(1f))
+                SetupStep.COMPLETE -> {
+                    // Connection status
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.setup_connection_success),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                uiState.serverVersion?.let { version ->
+                                    Text(
+                                        text = "Server version: $version",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                    )
+                                }
+                            }
+                        }
+                    }
 
-            // Buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedButton(
-                    onClick = viewModel::testConnection,
-                    modifier = Modifier.weight(1f),
-                    enabled = !uiState.isLoading && uiState.haUrl.isNotBlank()
-                ) {
-                    Text(
-                        if (uiState.isLoading) "Testing..."
-                        else stringResource(R.string.setup_test_connection)
-                    )
-                }
+                    Spacer(modifier = Modifier.weight(1f))
 
-                Button(
-                    onClick = { viewModel.saveAndContinue(onSetupComplete) },
-                    modifier = Modifier.weight(1f),
-                    enabled = uiState.isConnected && !uiState.isLoading
-                ) {
-                    Text(stringResource(R.string.setup_continue))
+                    // Continue button
+                    Button(
+                        onClick = { viewModel.continueToApp(onSetupComplete) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.setup_continue))
+                    }
                 }
             }
         }
-    }
-
-    // Token help dialog
-    if (showTokenHelp) {
-        AlertDialog(
-            onDismissRequest = { showTokenHelp = false },
-            title = { Text(stringResource(R.string.setup_token_help_title)) },
-            text = {
-                Text(stringResource(R.string.setup_token_help_body))
-            },
-            confirmButton = {
-                TextButton(onClick = { showTokenHelp = false }) {
-                    Text("OK")
-                }
-            }
-        )
     }
 }

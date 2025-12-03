@@ -1,6 +1,6 @@
 {
   "name": "RelayPrint",
-  "version": "0.1.19",
+  "version": "0.1.20",
   "slug": "relay_print",
   "description": "Home Assistant add-on to replace Google Cloud Print with local and remote printing capabilities.",
   "url": "https://github.com/samuelmukoti/ha-printer-relay",
@@ -10,11 +10,13 @@
   "init": false,
   "ports": {
     "631/tcp": 631,
-    "5353/udp": 5353
+    "5353/udp": 5353,
+    "7779/tcp": 7779
   },
   "ports_description": {
     "631/tcp": "CUPS print server",
-    "5353/udp": "Avahi/mDNS service discovery"
+    "5353/udp": "Avahi/mDNS service discovery",
+    "7779/tcp": "RelayPrint API (for mobile app)"
   },
   "ingress": true,
   "ingress_port": 7779,

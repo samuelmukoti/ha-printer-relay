@@ -2,20 +2,21 @@
 """
 RelayPrint REST API & Web Dashboard
 
-This Flask API is accessed via Home Assistant's Ingress proxy, which handles:
-- Authentication (HA user sessions or long-lived access tokens)
-- HTTPS/SSL termination
-- Access control
+This Flask API can be accessed via:
+1. Home Assistant's Ingress proxy (handles auth via session cookies)
+2. Direct API access on port 7779 with Bearer token authentication
 
-For external/mobile app access, use HA's long-lived access tokens.
+For external/mobile app access, use HA OAuth tokens as Bearer tokens.
 """
 from flask import Flask, request, jsonify, send_file, render_template, send_from_directory
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
+from functools import wraps
 import os
 import logging
 import subprocess
 import socket
+import requests
 from datetime import datetime, timezone
 from job_queue_manager import queue_manager
 from printer_discovery import get_printers, PrinterDiscovery
@@ -38,11 +39,70 @@ UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', '/data/print_jobs')
 ALLOWED_EXTENSIONS = {'pdf', 'ps', 'txt', 'png', 'jpg', 'jpeg'}
 MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB max file size
 
+# Home Assistant Supervisor API for token validation
+SUPERVISOR_TOKEN = os.environ.get('SUPERVISOR_TOKEN', '')
+HA_BASE_URL = os.environ.get('HA_BASE_URL', 'http://supervisor/core')
+
 app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def is_ingress_request():
+    """Check if request comes from HA Ingress (already authenticated)."""
+    # Ingress requests have specific headers set by HA
+    return request.headers.get('X-Ingress-Path') is not None
+
+
+def validate_ha_token(token):
+    """Validate a Home Assistant access token by calling HA API."""
+    try:
+        # Use the token to call HA's /api/ endpoint
+        headers = {'Authorization': f'Bearer {token}'}
+        # Try to get HA config - this validates the token
+        response = requests.get(
+            f'{HA_BASE_URL}/api/',
+            headers=headers,
+            timeout=5
+        )
+        return response.status_code == 200
+    except Exception as e:
+        logger.warning(f"Token validation failed: {e}")
+        # If we can't reach HA API, try alternate validation
+        # For internal requests via Supervisor, also accept Supervisor token
+        if SUPERVISOR_TOKEN and token == SUPERVISOR_TOKEN:
+            return True
+        return False
+
+
+def require_auth(f):
+    """Decorator to require authentication for API endpoints.
+
+    Allows requests that either:
+    1. Come through HA Ingress (X-Ingress-Path header present)
+    2. Have a valid Bearer token in Authorization header
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Ingress requests are pre-authenticated by HA
+        if is_ingress_request():
+            return f(*args, **kwargs)
+
+        # Check for Bearer token
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            token = auth_header[7:]  # Remove 'Bearer ' prefix
+            if validate_ha_token(token):
+                return f(*args, **kwargs)
+            else:
+                return jsonify({'error': 'Invalid or expired token'}), 401
+
+        # No valid authentication
+        return jsonify({'error': 'Authentication required'}), 401
+
+    return decorated_function
 
 # ============================================================================
 # Web Dashboard Routes
@@ -58,6 +118,7 @@ def dashboard():
 # ============================================================================
 
 @app.route('/api/print', methods=['POST'])
+@require_auth
 def submit_print_job():
     """Submit a print job.
 
@@ -111,6 +172,7 @@ def submit_print_job():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/print/<int:job_id>/status', methods=['GET'])
+@require_auth
 def get_job_status(job_id):
     """Get status of a print job."""
     try:
@@ -120,6 +182,7 @@ def get_job_status(job_id):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/print/<int:job_id>', methods=['DELETE'])
+@require_auth
 def cancel_job(job_id):
     """Cancel a print job."""
     try:
@@ -135,6 +198,7 @@ def cancel_job(job_id):
 # ============================================================================
 
 @app.route('/api/printers', methods=['GET'])
+@require_auth
 def list_printers():
     """List all available printers configured in CUPS."""
     try:
@@ -144,6 +208,7 @@ def list_printers():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/discover', methods=['GET'])
+@require_auth
 def discover_printers():
     """Discover network printers using mDNS/DNS-SD (Avahi)."""
     try:
@@ -154,6 +219,7 @@ def discover_printers():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/printers/add', methods=['POST'])
+@require_auth
 def add_printer():
     """Add a new printer to CUPS."""
     try:
@@ -186,6 +252,7 @@ def add_printer():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/printers/<printer_name>', methods=['DELETE'])
+@require_auth
 def remove_printer(printer_name):
     """Remove a printer from CUPS."""
     try:
@@ -201,6 +268,7 @@ def remove_printer(printer_name):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/printers/test', methods=['POST'])
+@require_auth
 def test_print():
     """Send a test page to a printer."""
     try:
@@ -226,6 +294,7 @@ def test_print():
 # ============================================================================
 
 @app.route('/api/queue/status', methods=['GET'])
+@require_auth
 def get_queue_status():
     """Get overall queue status."""
     try:
@@ -240,11 +309,15 @@ def get_queue_status():
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """API health check endpoint."""
+    """API health check endpoint.
+
+    This endpoint is intentionally NOT protected by @require_auth
+    to allow mobile apps to probe for the addon without a token.
+    """
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now(timezone.utc).isoformat(),
-        'version': '0.1.10'
+        'version': '0.1.20'
     })
 
 # ============================================================================

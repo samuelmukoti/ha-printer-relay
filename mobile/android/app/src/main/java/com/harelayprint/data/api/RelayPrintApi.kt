@@ -5,6 +5,52 @@ import okhttp3.RequestBody
 import retrofit2.Response
 import retrofit2.http.*
 
+/**
+ * Home Assistant Supervisor API for discovering the RelayPrint addon.
+ * Used to find the ingress URL automatically.
+ */
+interface HaSupervisorApi {
+
+    companion object {
+        // Known addon slugs to search for
+        val KNOWN_ADDON_SLUGS = listOf(
+            "relay_print",           // Local addon
+            "885c40c0_relay_print",  // Store addon with repo prefix
+            "local_relay_print"      // Alternative local name
+        )
+    }
+
+    /**
+     * List all installed addons to find RelayPrint.
+     */
+    @GET("api/hassio/addons")
+    suspend fun listAddons(): Response<SupervisorAddonsListResponse>
+
+    /**
+     * Get detailed addon info including ingress URL.
+     */
+    @GET("api/hassio/addons/{slug}/info")
+    suspend fun getAddonInfo(@Path("slug") slug: String): Response<SupervisorAddonInfoResponse>
+
+    /**
+     * Create an ingress session for an addon.
+     * This is the proper way to access addon ingress externally with OAuth tokens.
+     * Returns a session token that can be used to construct the ingress URL.
+     */
+    @POST("api/hassio/ingress/session")
+    suspend fun createIngressSession(@Body request: IngressSessionRequest): Response<IngressSessionResponse>
+
+    /**
+     * Get HA panels/sidebar configuration to find addon ingress paths.
+     */
+    @GET("api/config")
+    suspend fun getConfig(): Response<HaConfigResponse>
+}
+
+/**
+ * RelayPrint addon API - accessed through HA Ingress.
+ * Base URL will be dynamically set to the ingress path.
+ */
 interface RelayPrintApi {
 
     @GET("api/health")

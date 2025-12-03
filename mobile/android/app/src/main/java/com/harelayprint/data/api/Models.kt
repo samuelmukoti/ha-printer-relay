@@ -92,3 +92,84 @@ data class PrintOptions(
     val quality: PrintQuality = PrintQuality.NORMAL,
     val paperSize: PaperSize = PaperSize.A4
 )
+
+// Home Assistant Supervisor API models for addon discovery
+@Serializable
+data class SupervisorAddonInfoResponse(
+    val result: String,
+    val data: AddonInfo
+)
+
+@Serializable
+data class AddonInfo(
+    val name: String,
+    val slug: String,
+    val version: String,
+    val state: String,
+    val ingress: Boolean = false,
+    @SerialName("ingress_entry") val ingressEntry: String? = null,
+    @SerialName("ingress_url") val ingressUrl: String? = null,
+    @SerialName("ingress_port") val ingressPort: Int? = null
+)
+
+@Serializable
+data class SupervisorAddonsListResponse(
+    val result: String,
+    val data: AddonsListData
+)
+
+@Serializable
+data class AddonsListData(
+    val addons: List<AddonSummary>
+)
+
+@Serializable
+data class AddonSummary(
+    val name: String,
+    val slug: String,
+    val state: String
+)
+
+// Ingress session API models
+@Serializable
+data class IngressSessionRequest(
+    val addon: String
+)
+
+@Serializable
+data class IngressSessionResponse(
+    val result: String,
+    val data: IngressSessionData
+)
+
+@Serializable
+data class IngressSessionData(
+    val session: String
+)
+
+// HA Config API response
+@Serializable
+data class HaConfigResponse(
+    val components: List<String> = emptyList(),
+    val version: String = "",
+    @SerialName("config_dir") val configDir: String = "",
+    @SerialName("whitelist_external_dirs") val whitelistExternalDirs: List<String> = emptyList(),
+    @SerialName("allowlist_external_dirs") val allowlistExternalDirs: List<String> = emptyList(),
+    @SerialName("allowlist_external_urls") val allowlistExternalUrls: List<String> = emptyList(),
+    @SerialName("latitude") val latitude: Double = 0.0,
+    @SerialName("longitude") val longitude: Double = 0.0,
+    @SerialName("unit_system") val unitSystem: UnitSystem? = null,
+    @SerialName("location_name") val locationName: String = "",
+    @SerialName("time_zone") val timeZone: String = "",
+    @SerialName("external_url") val externalUrl: String? = null,
+    @SerialName("internal_url") val internalUrl: String? = null,
+    @SerialName("state") val state: String = ""
+)
+
+@Serializable
+data class UnitSystem(
+    val length: String = "",
+    val mass: String = "",
+    val temperature: String = "",
+    val volume: String = ""
+)

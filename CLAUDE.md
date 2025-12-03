@@ -118,3 +118,84 @@ GitHub Actions (`.github/workflows/test.yml`):
 2. Run integration tests in Docker
 3. Build multi-architecture Docker images
 4. Push to GitHub Container Registry (GHCR)
+
+## Deployment Workflows
+
+### Deploying the Add-on to Home Assistant
+
+1. **Commit and push changes to GitHub:**
+   ```bash
+   git add .
+   git commit -m "Description of changes"
+   git push
+   ```
+
+2. **Wait for GitHub Actions to complete** (builds multi-arch Docker images)
+
+3. **Update the add-on on Home Assistant instance:**
+   ```bash
+   # SSH into HA instance
+   ssh root@192.168.86.5
+
+   # Navigate to addon directory and pull latest
+   cd /addons/ha-printer-relay
+   git pull
+
+   # Restart the addon via HA Supervisor API
+   ha addons restart local_relay_print
+
+   # Or use the HA web UI: Settings → Add-ons → RelayPrint → Restart
+   ```
+
+4. **Verify deployment:**
+   - Check addon logs in HA UI or via `ha addons logs local_relay_print`
+   - Test API health endpoint: `curl http://localhost:7779/api/health`
+
+### Deploying the Android App to Connected Device
+
+1. **Navigate to the Android project:**
+   ```bash
+   cd mobile/android
+   ```
+
+2. **Build the debug APK:**
+   ```bash
+   ./gradlew assembleDebug
+   ```
+
+3. **Verify device is connected:**
+   ```bash
+   adb devices
+   ```
+
+4. **Install and launch the app:**
+   ```bash
+   adb install -r app/build/outputs/apk/debug/app-debug.apk
+   adb shell am start -n com.harelayprint/.app.MainActivity
+   ```
+
+5. **Monitor logs during testing:**
+   ```bash
+   # Clear logs and watch specific tags
+   adb logcat -c
+   adb logcat -s "HaAuthManager:*" "ApiClientFactory:*" "SetupViewModel:*"
+   ```
+
+### Mobile App Authentication Flow
+
+The mobile app uses OAuth2 with PKCE to authenticate with Home Assistant:
+1. User enters HA URL (e.g., `https://lahome.mukoti.com`)
+2. App opens WebView with HA OAuth login page
+3. User authenticates with HA credentials
+4. App captures OAuth callback with authorization code
+5. App exchanges code for access token
+6. App discovers RelayPrint addon via direct port (7779) or ingress proxy
+7. All subsequent API calls use Bearer token authentication
+
+### Add-on API Authentication
+
+The add-on supports two authentication modes:
+1. **Ingress (browser/HA sidebar):** Requests with `X-Ingress-Path` header are pre-authenticated by HA
+2. **Direct API (mobile app):** Requests with `Authorization: Bearer <token>` header are validated against HA's `/api/` endpoint
+
+The `/api/health` endpoint is intentionally unprotected to allow discovery probing.
