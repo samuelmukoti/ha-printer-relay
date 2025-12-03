@@ -263,8 +263,24 @@ def decode_mdns_name(name):
     return re.sub(r'\\(\d{3})', replace_octal, name)
 
 def discover_network_printers():
-    """Discover printers on the network using avahi-browse."""
-    discovered = []
+    """Discover printers on the network using avahi-browse.
+
+    Groups printers by IP address and returns all available protocols
+    for each physical printer to allow user to choose.
+    """
+    # Use dict to group by IP address
+    printers_by_ip = {}
+
+    # Get existing printers to filter out already-added ones
+    existing_printers = get_printers()
+    existing_ips = set()
+    for p in existing_printers:
+        uri = p.get('uri', '')
+        # Extract IP from URI like ipp://192.168.1.100:631/...
+        import re
+        ip_match = re.search(r'://([0-9.]+)[:/]', uri)
+        if ip_match:
+            existing_ips.add(ip_match.group(1))
 
     try:
         # Use avahi-browse to find IPP printers
@@ -276,7 +292,6 @@ def discover_network_printers():
         )
 
         # Parse avahi-browse output
-        current_printer = {}
         for line in result.stdout.split('\n'):
             if not line or line.startswith('+'):
                 continue
@@ -284,29 +299,41 @@ def discover_network_printers():
             parts = line.split(';')
             if len(parts) >= 8 and parts[0] == '=':
                 # Format: =;interface;protocol;name;type;domain;hostname;address;port;txt
+                interface = parts[1]
                 name = decode_mdns_name(parts[3])
+                service_type = parts[4]
                 hostname = decode_mdns_name(parts[6])
                 address = parts[7]
                 port = parts[8] if len(parts) > 8 else '631'
+                txt_record = parts[9] if len(parts) > 9 else ''
+
+                # Skip if already in CUPS
+                if address in existing_ips:
+                    continue
 
                 # Build printer URI
                 uri = f"ipp://{address}:{port}/ipp/print"
 
-                # Skip if already in CUPS
-                existing_printers = get_printers()
-                existing_uris = [p.get('uri', '') for p in existing_printers]
-
-                if not any(address in u for u in existing_uris):
-                    discovered.append({
+                # Group by IP address
+                if address not in printers_by_ip:
+                    printers_by_ip[address] = {
                         'name': name,
                         'hostname': hostname,
                         'address': address,
-                        'port': port,
-                        'uri': uri,
-                        'make_model': 'Network Printer (IPP)'
-                    })
+                        'protocols': []
+                    }
 
-        # Also try to find AirPrint printers
+                # Add this protocol option
+                printers_by_ip[address]['protocols'].append({
+                    'type': 'IPP',
+                    'uri': uri,
+                    'port': port,
+                    'secure': False,
+                    'interface': interface,
+                    'txt': txt_record
+                })
+
+        # Also try to find AirPrint/IPPS printers
         result_airprint = subprocess.run(
             ['avahi-browse', '-t', '-r', '-p', '_ipps._tcp'],
             capture_output=True,
@@ -320,27 +347,38 @@ def discover_network_printers():
 
             parts = line.split(';')
             if len(parts) >= 8 and parts[0] == '=':
+                interface = parts[1]
                 name = decode_mdns_name(parts[3])
                 hostname = decode_mdns_name(parts[6])
                 address = parts[7]
                 port = parts[8] if len(parts) > 8 else '631'
+                txt_record = parts[9] if len(parts) > 9 else ''
+
+                # Skip if already in CUPS
+                if address in existing_ips:
+                    continue
 
                 uri = f"ipps://{address}:{port}/ipp/print"
 
-                existing_printers = get_printers()
-                existing_uris = [p.get('uri', '') for p in existing_printers]
+                # Group by IP address
+                if address not in printers_by_ip:
+                    printers_by_ip[address] = {
+                        'name': name,
+                        'hostname': hostname,
+                        'address': address,
+                        'protocols': []
+                    }
 
-                if not any(address in u for u in existing_uris):
-                    # Check if we already added this from IPP discovery
-                    if not any(d['address'] == address for d in discovered):
-                        discovered.append({
-                            'name': name,
-                            'hostname': hostname,
-                            'address': address,
-                            'port': port,
-                            'uri': uri,
-                            'make_model': 'AirPrint Printer (IPPS)'
-                        })
+                # Add this protocol option (avoid duplicates from multiple interfaces)
+                if not any(p['uri'] == uri for p in printers_by_ip[address]['protocols']):
+                    printers_by_ip[address]['protocols'].append({
+                        'type': 'IPPS (AirPrint)',
+                        'uri': uri,
+                        'port': port,
+                        'secure': True,
+                        'interface': interface,
+                        'txt': txt_record
+                    })
 
     except subprocess.TimeoutExpired:
         logger.warning("Printer discovery timed out")
@@ -359,17 +397,31 @@ def discover_network_printers():
                     parts = line.split()
                     if len(parts) >= 2:
                         uri = parts[1]
-                        discovered.append({
-                            'name': 'Network Printer',
-                            'uri': uri,
-                            'make_model': 'Discovered Printer'
-                        })
+                        # Extract IP from URI for grouping
+                        import re
+                        ip_match = re.search(r'://([0-9.]+)[:/]', uri)
+                        address = ip_match.group(1) if ip_match else uri
+                        if address not in printers_by_ip:
+                            printers_by_ip[address] = {
+                                'name': 'Network Printer',
+                                'hostname': '',
+                                'address': address,
+                                'protocols': [{
+                                    'type': 'Discovered',
+                                    'uri': uri,
+                                    'port': '631',
+                                    'secure': uri.startswith('ipps'),
+                                    'interface': '',
+                                    'txt': ''
+                                }]
+                            }
         except Exception as e:
             logger.error(f"Fallback discovery failed: {e}")
     except Exception as e:
         logger.error(f"Printer discovery error: {e}")
 
-    return discovered
+    # Convert grouped dict to list for API response
+    return list(printers_by_ip.values())
 
 def add_printer_to_cups(name, uri, location=''):
     """Add a printer to CUPS using lpadmin."""

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.17] - 2025-12-03
+
+### Added
+- **Expandable printer cards in discovery UI** - Click on a discovered printer to see detailed information before adding
+- **Protocol selection** - When a printer supports multiple protocols (IPP, IPPS/AirPrint), users can now choose which one to use
+- **Printer deduplication** - Same printer discovered via multiple protocols is now grouped into a single card with protocol options
+
+### Changed
+- Improved printer discovery API to return grouped printers with all available protocols
+- Secure protocols (IPPS) are now highlighted and recommended when available
+- UI shows IP address, hostname, port, and URI for each protocol option
+
 ## [0.1.16] - 2025-12-03
 
 ### Fixed
