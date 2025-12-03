@@ -37,7 +37,8 @@ class TestConfigValidation(unittest.TestCase):
         """Test port configuration."""
         required_ports = {
             '631/tcp': 631,  # CUPS
-            '5353/udp': 5353  # Avahi
+            '5353/udp': 5353,  # Avahi
+            '7779/tcp': 7779  # RelayPrint API (for mobile app)
         }
         self.assertEqual(self.config_json['ports'], required_ports)
 

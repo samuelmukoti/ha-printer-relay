@@ -12,6 +12,15 @@ def client():
     with app.test_client() as client:
         yield client
 
+@pytest.fixture
+def auth_client():
+    """Client that simulates requests coming from HA Ingress (authenticated)."""
+    app.config['TESTING'] = True
+    with app.test_client() as client:
+        # Simulate Ingress by adding the X-Ingress-Path header
+        client.environ_base['HTTP_X_INGRESS_PATH'] = '/api/hassio_ingress/test'
+        yield client
+
 def test_health_check(client):
     """Test health check endpoint."""
     response = client.get('/api/health')
@@ -22,7 +31,7 @@ def test_health_check(client):
     assert 'version' in data
 
 @patch('print_api.get_printers')
-def test_list_printers(mock_get_printers, client):
+def test_list_printers(mock_get_printers, auth_client):
     """Test listing available printers."""
     mock_printers = [
         {'name': 'Printer1', 'status': 'idle'},
@@ -30,13 +39,13 @@ def test_list_printers(mock_get_printers, client):
     ]
     mock_get_printers.return_value = mock_printers
 
-    response = client.get('/api/printers')
+    response = auth_client.get('/api/printers')
     assert response.status_code == 200
     data = json.loads(response.data)
     assert data['printers'] == mock_printers
 
 @patch('job_queue_manager.get_queue_manager')
-def test_submit_print_job(mock_get_queue_manager, client):
+def test_submit_print_job(mock_get_queue_manager, auth_client):
     """Test submitting a print job."""
     mock_queue_manager = MagicMock()
     mock_get_queue_manager.return_value = mock_queue_manager
@@ -50,7 +59,7 @@ def test_submit_print_job(mock_get_queue_manager, client):
     test_file = (open('tests/test_data/test.pdf', 'rb') if os.path.exists('tests/test_data/test.pdf')
                  else open('test_data/test.pdf', 'rb'))
 
-    response = client.post(
+    response = auth_client.post(
         '/api/print',
         data={**data, 'file': (test_file, 'test.pdf')},
         content_type='multipart/form-data'
@@ -63,7 +72,7 @@ def test_submit_print_job(mock_get_queue_manager, client):
     assert data['status'] == 'submitted'
 
 @patch('job_queue_manager.get_queue_manager')
-def test_get_job_status(mock_get_queue_manager, client):
+def test_get_job_status(mock_get_queue_manager, auth_client):
     """Test getting job status."""
     mock_queue_manager = MagicMock()
     mock_get_queue_manager.return_value = mock_queue_manager
@@ -74,25 +83,25 @@ def test_get_job_status(mock_get_queue_manager, client):
     }
     mock_queue_manager.get_job_status.return_value = mock_status
 
-    response = client.get('/api/print/123/status')
+    response = auth_client.get('/api/print/123/status')
     assert response.status_code == 200
     data = json.loads(response.data)
     assert data == mock_status
 
 @patch('job_queue_manager.get_queue_manager')
-def test_cancel_job(mock_get_queue_manager, client):
+def test_cancel_job(mock_get_queue_manager, auth_client):
     """Test canceling a print job."""
     mock_queue_manager = MagicMock()
     mock_get_queue_manager.return_value = mock_queue_manager
     mock_queue_manager.cancel_job.return_value = True
 
-    response = client.delete('/api/print/123')
+    response = auth_client.delete('/api/print/123')
     assert response.status_code == 200
     data = json.loads(response.data)
     assert data['message'] == 'Job canceled successfully'
 
 @patch('job_queue_manager.get_queue_manager')
-def test_get_queue_status(mock_get_queue_manager, client):
+def test_get_queue_status(mock_get_queue_manager, auth_client):
     """Test getting queue status."""
     mock_queue_manager = MagicMock()
     mock_get_queue_manager.return_value = mock_queue_manager
@@ -103,7 +112,7 @@ def test_get_queue_status(mock_get_queue_manager, client):
     }
     mock_queue_manager.get_queue_status.return_value = mock_status
 
-    response = client.get('/api/queue/status')
+    response = auth_client.get('/api/queue/status')
     assert response.status_code == 200
     data = json.loads(response.data)
     assert data == mock_status
@@ -115,19 +124,19 @@ def test_not_found(client):
     data = json.loads(response.data)
     assert data['error'] == 'Not found'
 
-def test_submit_print_job_no_file(client):
+def test_submit_print_job_no_file(auth_client):
     """Test submitting without a file."""
-    response = client.post('/api/print', data={'printer_name': 'TestPrinter'})
+    response = auth_client.post('/api/print', data={'printer_name': 'TestPrinter'})
     assert response.status_code == 400
     data = json.loads(response.data)
     assert 'No file' in data['error']
 
-def test_submit_print_job_no_printer(client):
+def test_submit_print_job_no_printer(auth_client):
     """Test submitting without specifying printer."""
     test_file = (open('tests/test_data/test.pdf', 'rb') if os.path.exists('tests/test_data/test.pdf')
                  else open('test_data/test.pdf', 'rb'))
 
-    response = client.post(
+    response = auth_client.post(
         '/api/print',
         data={'file': (test_file, 'test.pdf')},
         content_type='multipart/form-data'
@@ -137,3 +146,11 @@ def test_submit_print_job_no_printer(client):
     assert response.status_code == 400
     data = json.loads(response.data)
     assert 'Printer name' in data['error']
+
+
+def test_unauthenticated_request(client):
+    """Test that unauthenticated requests are rejected."""
+    response = client.get('/api/printers')
+    assert response.status_code == 401
+    data = json.loads(response.data)
+    assert 'error' in data
