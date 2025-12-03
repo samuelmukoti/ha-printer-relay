@@ -73,7 +73,7 @@ jobs:
         platforms: linux/${{ matrix.arch }}
         push: ${{ github.event_name != 'pull_request' }}
         tags: |
-          ghcr.io/${{ github.repository }}/open-replay-printer-${{ matrix.arch }}:latest
-          ghcr.io/${{ github.repository }}/open-replay-printer-${{ matrix.arch }}:${{ github.sha }}
+          ghcr.io/${{ github.repository }}/relay-print-${{ matrix.arch }}:latest
+          ghcr.io/${{ github.repository }}/relay-print-${{ matrix.arch }}:${{ github.sha }}
         cache-from: type=gha
         cache-to: type=gha,mode=max 

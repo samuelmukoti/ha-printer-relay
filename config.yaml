@@ -1,9 +1,9 @@
 ---
-name: "Printer Relay"
-version: "1.0.0"
-slug: "printer_relay"
-description: "A Home Assistant add-on to relay print jobs from mobile devices to network printers"
-url: "https://github.com/yourusername/ha-printer-relay"
+name: "RelayPrint"
+version: "0.1.1"
+slug: "relay_print"
+description: "Home Assistant add-on to replace Google Cloud Print with local and remote printing capabilities."
+url: "https://github.com/samuelmukoti/ha-printer-relay"
 arch:
   - armhf
   - armv7
@@ -13,28 +13,48 @@ arch:
 startup: services
 boot: auto
 ingress: true
-ingress_port: 8080
+ingress_port: 7779
 panel_icon: mdi:printer
+panel_title: "RelayPrint"
+hassio_api: true
+hassio_role: default
+host_network: true
+apparmor: true
+privileged:
+  - NET_ADMIN
 ports:
   631/tcp: 631
-  8080/tcp: 8080
+  5353/udp: 5353
 ports_description:
-  631/tcp: "CUPS port"
-  8080/tcp: "Web interface"
-environment:
-  API_SECRET: ""
-  TOKEN_EXPIRY: 3600
-options:
-  api_secret: ""
-  token_expiry: 3600
-schema:
-  api_secret: str
-  token_expiry: int
-init: false
-host_network: true
+  631/tcp: "CUPS print server"
+  5353/udp: "Avahi/mDNS service discovery"
 devices:
-  - /dev/bus/usb
   - /dev/bus/usb:/dev/bus/usb:rwm
 map:
   - config:rw
- 
+auth_api: true
+init: false
+options:
+  log_level: info
+  cups_admin_user: admin
+  cups_admin_password: changeme
+  printer_options:
+    default_media: A4
+    color_mode: color
+    duplex: false
+  advanced:
+    cups_timeout: 30
+    job_retention: 24
+    max_jobs: 100
+schema:
+  log_level: list(trace|debug|info|notice|warning|error|fatal)
+  cups_admin_user: str
+  cups_admin_password: password
+  printer_options:
+    default_media: list(A4|Letter|Legal)
+    color_mode: list(color|monochrome)
+    duplex: bool
+  advanced:
+    cups_timeout: int(10,300)
+    job_retention: int(1,168)
+    max_jobs: int(10,1000)

@@ -1,6 +1,6 @@
 # Printer Setup Guide
 
-This guide explains how to set up and configure printers with the Open-ReplayPrinter add-on for Home Assistant.
+This guide explains how to set up and configure printers with the RelayPrint add-on for Home Assistant.
 
 ## Table of Contents
 
@@ -18,7 +18,7 @@ This guide explains how to set up and configure printers with the Open-ReplayPri
 Before setting up a printer, ensure you have:
 
 - Home Assistant OS or Supervised installation
-- Open-ReplayPrinter add-on installed and running
+- RelayPrint add-on installed and running
 - Physical access to your printer (for USB printers)
 - Network connectivity (for network printers)
 - Printer manufacturer's drivers (if not using generic drivers)
@@ -28,7 +28,7 @@ Before setting up a printer, ensure you have:
 1. Open Home Assistant web interface
 2. Navigate to Settings → Add-ons
 3. Click on "Add-on Store"
-4. Search for "Open-ReplayPrinter"
+4. Search for "RelayPrint"
 5. Click "Install"
 6. Wait for installation to complete
 7. Start the add-on
@@ -38,7 +38,7 @@ Before setting up a printer, ensure you have:
 ### USB Printers
 
 1. Connect your printer to your Home Assistant device via USB
-2. Open the Open-ReplayPrinter web interface (via Home Assistant ingress)
+2. Open the RelayPrint web interface (via Home Assistant ingress)
 3. Click "Add Printer"
 4. Select "Local Printers" tab
 5. Your USB printer should appear automatically
@@ -52,7 +52,7 @@ Before setting up a printer, ensure you have:
 ### Network Printers
 
 1. Ensure your printer is connected to your network
-2. Open the Open-ReplayPrinter web interface
+2. Open the RelayPrint web interface
 3. Click "Add Printer"
 4. Select "Network Printers" tab
 5. Choose discovery method:
@@ -202,7 +202,7 @@ Regular maintenance tasks:
 
 For additional support:
 
-- Documentation: [GitHub Wiki](https://github.com/samuelmukoti/open-replay-printer/wiki)
+- Documentation: [GitHub Wiki](https://github.com/samuelmukoti/ha-printer-relay/wiki)
 - Community: [Home Assistant Community](https://community.home-assistant.io)
-- Issues: [GitHub Issues](https://github.com/samuelmukoti/open-replay-printer/issues)
-- Updates: [Release Notes](https://github.com/samuelmukoti/open-replay-printer/releases) 
+- Issues: [GitHub Issues](https://github.com/samuelmukoti/ha-printer-relay/issues)
+- Updates: [Release Notes](https://github.com/samuelmukoti/ha-printer-relay/releases) 

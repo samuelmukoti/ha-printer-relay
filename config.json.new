@@ -1,49 +1,61 @@
 {
-  "name": "Open-ReplayPrinter",
-  "version": "0.1.0",
-  "slug": "open_replay_printer",
-  "description": "CUPS print server with remote access via Home Assistant",
-  "url": "https://github.com/yourusername/ha-printer-relay",
-  "arch": ["armhf", "armv7", "aarch64", "amd64", "i386"],
-  "startup": "application",
+  "name": "RelayPrint",
+  "version": "0.1.1",
+  "slug": "relay_print",
+  "description": "Home Assistant add-on to replace Google Cloud Print with local and remote printing capabilities.",
+  "url": "https://github.com/samuelmukoti/ha-printer-relay",
+  "startup": "services",
   "boot": "auto",
-  "host_network": true,
-  "ingress": true,
-  "ingress_port": 8080,
-  "panel_icon": "mdi:printer",
-  "options": {
-    "cups_admin_user": "admin",
-    "cups_admin_password": "admin",
-    "api_secret": "change-me-in-production",
-    "token_expiry": 86400,
-    "log_level": "info",
-    "allowed_networks": ["192.168.0.0/16", "172.16.0.0/12", "10.0.0.0/8"],
-    "expose_api": false,
-    "expose_cups": false
-  },
-  "schema": {
-    "cups_admin_user": "str",
-    "cups_admin_password": "password",
-    "api_secret": "password",
-    "token_expiry": "int(3600,604800)",
-    "log_level": "list(debug|info|warning|error)",
-    "allowed_networks": ["str"],
-    "expose_api": "bool",
-    "expose_cups": "bool"
-  },
+  "arch": ["aarch64", "amd64", "armhf", "armv7", "i386"],
+  "init": false,
   "ports": {
-    "631/tcp": null,
-    "8080/tcp": null
+    "631/tcp": 631,
+    "5353/udp": 5353
   },
   "ports_description": {
-    "631/tcp": "CUPS web interface (optional)",
-    "8080/tcp": "Print API (optional)"
+    "631/tcp": "CUPS print server",
+    "5353/udp": "Avahi/mDNS service discovery"
   },
-  "webui": "http://[HOST]:[PORT:8080]",
+  "ingress": true,
+  "ingress_port": 7779,
+  "panel_icon": "mdi:printer",
+  "panel_title": "RelayPrint",
   "hassio_api": true,
   "hassio_role": "default",
+  "host_network": true,
+  "apparmor": true,
+  "privileged": ["NET_ADMIN"],
+  "devices": ["/dev/bus/usb:/dev/bus/usb:rwm"],
+  "map": ["config:rw"],
   "auth_api": true,
-  "services": ["mqtt:need"],
-  "map": ["config:rw", "ssl"],
-  "image": "ghcr.io/yourusername/open-replay-printer-{arch}"
+  "options": {
+    "log_level": "info",
+    "cups_admin_user": "admin",
+    "cups_admin_password": "changeme",
+    "printer_options": {
+      "default_media": "A4",
+      "color_mode": "color",
+      "duplex": false
+    },
+    "advanced": {
+      "cups_timeout": 30,
+      "job_retention": 24,
+      "max_jobs": 100
+    }
+  },
+  "schema": {
+    "log_level": "list(trace|debug|info|notice|warning|error|fatal)",
+    "cups_admin_user": "str",
+    "cups_admin_password": "password",
+    "printer_options": {
+      "default_media": "list(A4|Letter|Legal)",
+      "color_mode": "list(color|monochrome)",
+      "duplex": "bool"
+    },
+    "advanced": {
+      "cups_timeout": "int(10,300)",
+      "job_retention": "int(1,168)",
+      "max_jobs": "int(10,1000)"
+    }
+  }
 }

@@ -1,6 +1,6 @@
 # Product Requirements Document (PRD)
 
-## Project Name: Open-ReplayPrinter
+## Project Name: RelayPrint (Home Assistant Printer Relay)
 
 ## 1. Purpose and Scope
 
@@ -8,7 +8,7 @@
 
 **Scope:**
 
-- Home Assistant add-on („Open-ReplayPrinter") packaging CUPS + Avahi for local AirPrint and IPP Everywhere.
+- Home Assistant add-on („RelayPrint") packaging CUPS + Avahi for local AirPrint and IPP Everywhere.
 - Secure remote access via Home Assistant Cloud ingress or direct IPPS endpoint.
 - Companion mobile apps (iOS & Android) registering as virtual printers.
 - WordPress plugin or REST API endpoint for automated web-to-print workflows.

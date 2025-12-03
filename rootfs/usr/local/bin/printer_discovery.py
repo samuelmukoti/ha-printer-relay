@@ -132,5 +132,25 @@ def main():
     # Output as JSON
     print(json.dumps(result, indent=2))
 
+def get_printers():
+    """Helper function to get all printers with their attributes.
+
+    Used by print_api.py for the /api/printers endpoint.
+    Returns a list of printer dictionaries.
+    """
+    try:
+        discovery = PrinterDiscovery()
+        printers = discovery.get_all_printers()
+        result = []
+        for name in printers:
+            attrs = discovery.get_printer_attributes(name)
+            if attrs:
+                result.append(attrs)
+        return result
+    except Exception as e:
+        logger.error(f"Failed to get printers: {e}")
+        return []
+
+
 if __name__ == "__main__":
     main() 

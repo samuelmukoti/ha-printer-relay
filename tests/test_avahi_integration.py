@@ -64,15 +64,15 @@ class TestAvahiIntegration(unittest.TestCase):
             dbus.UInt16(self.printer_port),  # port
             avahi.string_array_to_txt_array([  # TXT record
                 "rp=printers/test_printer",
-                "ty=Open-ReplayPrinter Test",
+                "ty=RelayPrint Test",
                 "adminurl=http://localhost:631/printers/test_printer",
                 "note=Test Printer",
                 "priority=50",
-                "product=(Open-ReplayPrinter)",
+                "product=(RelayPrint)",
                 "pdl=application/pdf,application/postscript",
                 "Color=T",
                 "Duplex=T",
-                "usb_MFG=Open-ReplayPrinter",
+                "usb_MFG=RelayPrint",
                 "usb_MDL=Test",
             ])
         )

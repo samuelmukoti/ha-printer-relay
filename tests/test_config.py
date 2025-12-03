@@ -63,15 +63,13 @@ class TestConfigValidation(unittest.TestCase):
 
         self.assertTrue(validate_against_schema(options, schema))
 
-    def test_ssl_configuration(self):
-        """Test SSL configuration options."""
-        self.assertIn('ssl', self.config_json['options'])
-        self.assertIn('certfile', self.config_json['options'])
-        self.assertIn('keyfile', self.config_json['options'])
-        
-        self.assertEqual(self.config_json['schema']['ssl'], 'bool')
-        self.assertEqual(self.config_json['schema']['certfile'], 'str')
-        self.assertEqual(self.config_json['schema']['keyfile'], 'str')
+    def test_cups_admin_configuration(self):
+        """Test CUPS admin configuration."""
+        self.assertIn('cups_admin_user', self.config_json['options'])
+        self.assertIn('cups_admin_password', self.config_json['options'])
+
+        self.assertEqual(self.config_json['schema']['cups_admin_user'], 'str')
+        self.assertEqual(self.config_json['schema']['cups_admin_password'], 'password')
 
     def test_printer_options(self):
         """Test printer-specific options."""
@@ -93,13 +91,11 @@ class TestConfigValidation(unittest.TestCase):
         self.assertTrue(schema['job_retention'].startswith('int('))
         self.assertTrue(schema['max_jobs'].startswith('int('))
 
-    def test_security_options(self):
-        """Test security-related configuration."""
-        self.assertIn('remote_access', self.config_json['options'])
-        self.assertIn('allowed_interfaces', self.config_json['options'])
-        
-        self.assertEqual(self.config_json['schema']['remote_access'], 'bool')
-        self.assertTrue(isinstance(self.config_json['schema']['allowed_interfaces'], list))
+    def test_ingress_configuration(self):
+        """Test ingress configuration (security handled by HA Ingress proxy)."""
+        # HA Ingress handles authentication and SSL, so we just verify ingress is enabled
+        self.assertTrue(self.config_json.get('ingress', False))
+        self.assertEqual(self.config_json.get('ingress_port'), 7779)
 
     def test_yaml_ui_configuration(self):
         """Test UI configuration in config.yaml."""
