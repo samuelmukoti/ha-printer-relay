@@ -1,32 +1,62 @@
 #!/usr/bin/with-contenv bashio
-# ==============================================================================
-# Home Assistant Add-on: RelayPrint Server
-# Configures CUPS with secure defaults
-# ==============================================================================
+set -euo pipefail
 
-# Get configuration values with defaults
+bashio::log.info "Starting RelayPrint services..."
+
+# ==============================================================================
+# Configure persistent storage
+# ==============================================================================
+mkdir -p \
+    /data/cups/ssl \
+    /data/cups/ppd \
+    /data/cups/interface \
+    /data/cups/spool \
+    /data/printers \
+    /data/logs \
+    /data/print_jobs
+
+chmod -R 755 /data/cups
+chmod 700 /data/cups/ssl
+chmod 755 /data/cups/ppd
+chmod 755 /data/cups/interface
+chmod 770 /data/cups/spool
+chmod 755 /data/printers
+chmod 755 /data/logs
+
+rm -rf /etc/cups
+ln -s /data/cups /etc/cups
+
+rm -rf /var/spool/cups
+ln -s /data/cups/spool /var/spool/cups
+
+if [ ! -f /data/cups/cupsd.conf ]; then
+    cp /etc/cups.default/cupsd.conf /data/cups/
+fi
+
+[ ! -f /data/cups/printers.conf ] && touch /data/cups/printers.conf
+[ ! -f /data/cups/classes.conf ] && touch /data/cups/classes.conf
+
+chown -R root:root /data/cups
+chown -R root:lp /data/cups/spool 2>/dev/null || true
+chown -R root:lp /data/printers 2>/dev/null || true
+
+bashio::log.info "Persistent storage configured"
+
+# ==============================================================================
+# Configure CUPS
+# ==============================================================================
 CUPS_ADMIN_USER=$(bashio::config 'cups_admin_user' 2>/dev/null || echo "admin")
 LOG_LEVEL=$(bashio::config 'log_level' 2>/dev/null || echo "info")
 MAX_JOBS=$(bashio::config 'advanced.max_jobs' 2>/dev/null || echo "100")
-JOB_RETENTION=$(bashio::config 'advanced.job_retention' 2>/dev/null || echo "24")
 
-# Validate LogLevel (CUPS only accepts specific values)
 case "${LOG_LEVEL}" in
     debug|debug2|info|warn|warning|error|notice) ;;
     *) LOG_LEVEL="info" ;;
 esac
 
-# Ensure numeric values
 [[ "${MAX_JOBS}" =~ ^[0-9]+$ ]] || MAX_JOBS="100"
-[[ "${JOB_RETENTION}" =~ ^[0-9]+$ ]] || JOB_RETENTION="24"
-
-# Use defaults if empty
 [[ -z "${CUPS_ADMIN_USER}" ]] && CUPS_ADMIN_USER="admin"
 
-# Configure CUPS
-bashio::log.info "Configuring CUPS..."
-
-# Basic settings
 {
     echo "LogLevel ${LOG_LEVEL}"
     echo "MaxLogSize 0"
@@ -40,61 +70,81 @@ bashio::log.info "Configuring CUPS..."
     echo "BrowseLocalProtocols dnssd"
     echo "DefaultAuthType Basic"
     echo "WebInterface Yes"
-} > /data/cups/cupsd.conf
-
-# Configure access control - allow local network access
-# CUPS is accessed via Home Assistant ingress, so we allow local connections
-{
+    echo ""
     echo "<Location />"
     echo "  Order allow,deny"
     echo "  Allow @LOCAL"
     echo "</Location>"
-
+    echo ""
     echo "<Location /admin>"
     echo "  Order allow,deny"
     echo "  Allow @LOCAL"
     echo "</Location>"
-
+    echo ""
     echo "<Location /admin/conf>"
     echo "  AuthType Default"
     echo "  Require user @SYSTEM ${CUPS_ADMIN_USER}"
     echo "  Order allow,deny"
     echo "  Allow @LOCAL"
     echo "</Location>"
-} >> /data/cups/cupsd.conf
-
-# Add default policy
-{
+    echo ""
     echo "<Policy default>"
     echo "  JobPrivateAccess default"
     echo "  JobPrivateValues default"
     echo "  SubscriptionPrivateAccess default"
     echo "  SubscriptionPrivateValues default"
-
     echo "  <Limit Create-Job Print-Job Print-URI Validate-Job>"
     echo "    Order deny,allow"
     echo "  </Limit>"
-
     echo "  <Limit Send-Document Send-URI Hold-Job Release-Job Restart-Job Purge-Jobs Set-Job-Attributes Create-Job-Subscription Renew-Subscription Cancel-Subscription Get-Notifications Reprocess-Job Cancel-Current-Job Suspend-Current-Job Resume-Job Cancel-My-Jobs Close-Job CUPS-Move-Job CUPS-Get-Document>"
     echo "    Require user @OWNER @SYSTEM"
     echo "    Order deny,allow"
     echo "  </Limit>"
-
     echo "  <Limit Cancel-Job Cancel-Jobs>"
     echo "    Require user @OWNER @SYSTEM"
     echo "    Order deny,allow"
     echo "  </Limit>"
-
     echo "  <Limit CUPS-Add-Modify-Printer CUPS-Delete-Printer CUPS-Add-Modify-Class CUPS-Delete-Class CUPS-Set-Default CUPS-Get-Devices>"
     echo "    AuthType Default"
     echo "    Require user @SYSTEM"
     echo "    Order deny,allow"
     echo "  </Limit>"
-
     echo "  <Limit All>"
     echo "    Order deny,allow"
     echo "  </Limit>"
     echo "</Policy>"
-} >> /data/cups/cupsd.conf
+} > /data/cups/cupsd.conf
 
-bashio::log.info "CUPS configuration completed" 
+bashio::log.info "CUPS configured"
+
+# ==============================================================================
+# Start D-Bus daemon
+# ==============================================================================
+bashio::log.info "Starting D-Bus daemon..."
+mkdir -p /run/dbus
+rm -f /run/dbus/pid
+dbus-daemon --system --nofork &
+sleep 1
+
+# ==============================================================================
+# Start Avahi daemon
+# ==============================================================================
+bashio::log.info "Starting Avahi daemon..."
+mkdir -p /run/avahi-daemon
+avahi-daemon --no-drop-root &
+sleep 1
+
+# ==============================================================================
+# Start CUPS daemon
+# ==============================================================================
+bashio::log.info "Starting CUPS daemon..."
+mkdir -p /run/cups
+cupsd -f &
+sleep 2
+
+# ==============================================================================
+# Start Print API server
+# ==============================================================================
+bashio::log.info "Starting Print API server on port 7779..."
+cd /usr/local/bin
+exec python3 -c "from print_api import app; app.run(host='0.0.0.0', port=7779, threaded=True)"

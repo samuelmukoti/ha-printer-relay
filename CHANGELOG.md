@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.7] - 2025-12-02
+
+### Changed
+- **Complete restructure to match working HA add-on pattern** - Based on EverythingSmartHome add-on
+  - Simplified to single `relayprint` service instead of multiple separate services
+  - Removed cont-init.d scripts, all initialization now in single run script
+  - Updated base images from 3.20 to 3.22 (matching working add-on)
+  - Simplified Dockerfile to match proven working pattern
+  - Run script now handles: D-Bus, Avahi, CUPS, and API startup in sequence
+
+### Fixed
+- **Container startup permission issues** - Restructured to eliminate `/init: Permission denied` error
+  - Single service architecture avoids s6-overlay complexity issues
+  - Proper service startup sequence in single run script
+
 ## [0.1.6] - 2025-12-03
 
 ### Fixed

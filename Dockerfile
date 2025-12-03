@@ -1,4 +1,4 @@
-ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.20
+ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.22
 FROM ${BUILD_FROM}
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -13,39 +13,26 @@ RUN apk add --no-cache \
     dbus \
     python3 \
     py3-pip \
-    openssl \
-    bash
-
-# Install build dependencies, Python packages, then remove build deps
-COPY requirements.txt /tmp/
-RUN apk add --no-cache --virtual .build-deps \
     gcc \
     musl-dev \
-    python3-dev \
-    && pip3 install --no-cache-dir --break-system-packages -r /tmp/requirements.txt \
-    && apk del .build-deps
+    python3-dev
+
+# Copy requirements and install Python packages
+COPY requirements.txt /tmp/
+RUN pip3 install --no-cache-dir --break-system-packages -r /tmp/requirements.txt
 
 # Create necessary directories
 RUN mkdir -p /data/cups /data/print_jobs /data/api \
     /usr/local/share/relayprint/templates \
     /usr/local/share/relayprint/static
 
-# Copy rootfs
-COPY rootfs /
-
-# Remove old services.d structure (using s6-overlay v3 s6-rc.d instead)
-RUN rm -rf /etc/services.d
-
-# Set up CUPS default config (used by init script to populate /data/cups)
-# The init script replaces /etc/cups with a symlink, so we save the default config
+# Save default CUPS config before rootfs copy
 RUN mkdir -p /etc/cups.default && \
     cp /etc/cups/cupsd.conf /etc/cups.default/
 
-# Ensure s6-overlay init has execute permissions
-RUN chmod +x /init 2>/dev/null || true
+# Copy rootfs
+COPY rootfs/ /
 
-# Make s6-overlay v3 service scripts executable
-RUN chmod +x /etc/s6-overlay/s6-rc.d/*/run
-
-# Make init scripts executable
-RUN chmod +x /etc/cont-init.d/*.sh
+# Remove old services.d if exists and set permissions
+RUN rm -rf /etc/services.d && \
+    chmod +x /etc/s6-overlay/s6-rc.d/relayprint/run
