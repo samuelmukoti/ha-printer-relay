@@ -1,10 +1,11 @@
-FROM ghcr.io/home-assistant/amd64-base:3.18
+ARG BUILD_FROM
+FROM ${BUILD_FROM}
 
 # Install required packages
 RUN apk add --no-cache \
     cups \
     cups-filters \
-    cups-pdf \
+    cups-dev \
     avahi \
     dbus \
     python3 \
@@ -12,9 +13,14 @@ RUN apk add --no-cache \
     openssl \
     bash
 
-# Install Python dependencies
+# Install build dependencies, Python packages, then remove build deps
 COPY requirements.txt /tmp/
-RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
+RUN apk add --no-cache --virtual .build-deps \
+    gcc \
+    musl-dev \
+    python3-dev \
+    && pip3 install --no-cache-dir -r /tmp/requirements.txt \
+    && apk del .build-deps
 
 # Create necessary directories
 RUN mkdir -p /data/cups /data/print_jobs /data/api
