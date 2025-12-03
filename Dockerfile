@@ -7,6 +7,7 @@ RUN apk add --no-cache \
     cups-filters \
     cups-dev \
     avahi \
+    avahi-tools \
     dbus \
     python3 \
     py3-pip \
@@ -23,7 +24,9 @@ RUN apk add --no-cache --virtual .build-deps \
     && apk del .build-deps
 
 # Create necessary directories
-RUN mkdir -p /data/cups /data/print_jobs /data/api
+RUN mkdir -p /data/cups /data/print_jobs /data/api \
+    /usr/local/share/relayprint/templates \
+    /usr/local/share/relayprint/static
 
 # Copy configuration files
 COPY rootfs /
@@ -62,4 +65,4 @@ LABEL \
     io.hass.name="RelayPrint" \
     io.hass.description="CUPS print server with remote access via Home Assistant" \
     io.hass.type="addon" \
-    io.hass.version="0.1.0"
+    io.hass.version="0.1.3"

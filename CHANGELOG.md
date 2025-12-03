@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2025-12-02
+
+### Added
+- **Web Dashboard UI** - Beautiful, user-friendly dashboard accessible via HA sidebar
+  - Home Assistant inspired dark theme design
+  - Dashboard view with printer status and queue summary
+  - Printers tab to manage connected printers
+  - Discover tab to scan and add network printers
+  - Print Queue tab to monitor and manage print jobs
+- **Network Printer Discovery** - Scan local network for IPP/AirPrint printers
+  - Uses Avahi/mDNS to discover printers automatically
+  - One-click add discovered printers to RelayPrint
+  - Manual printer addition with custom URI
+- **Printer Management API**
+  - `GET /api/discover` - Discover network printers
+  - `POST /api/printers/add` - Add printer to CUPS
+  - `DELETE /api/printers/<name>` - Remove printer from CUPS
+  - `POST /api/printers/test` - Send test page to printer
+
+### Changed
+- Flask API now serves web dashboard at root URL
+- Added avahi-tools package for network printer discovery
+
 ## [0.1.2] - 2025-12-02
 
 ### Fixed

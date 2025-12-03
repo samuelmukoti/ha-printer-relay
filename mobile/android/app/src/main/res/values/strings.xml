@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">HA RelayPrint</string>
+    <string name="print_service_settings">HA RelayPrint Settings</string>
+
+    <!-- Setup Screen -->
+    <string name="setup_title">Connect to Home Assistant</string>
+    <string name="setup_welcome">Connect your app to the RelayPrint add-on running on your Home Assistant server.</string>
+    <string name="setup_url_label">Home Assistant URL</string>
+    <string name="setup_url_hint">https://homeassistant.local:8123</string>
+    <string name="setup_token_label">Long-Lived Access Token</string>
+    <string name="setup_token_hint">Paste your token here</string>
+    <string name="setup_token_optional">Optional - required for remote access, not needed on local network</string>
+    <string name="setup_test_connection">Test Connection</string>
+    <string name="setup_continue">Continue</string>
+    <string name="setup_connection_success">Connected successfully!</string>
+    <string name="setup_token_help_title">Getting an Access Token</string>
+    <string name="setup_token_help_body">1. Open Home Assistant\n2. Click your profile (bottom left)\n3. Scroll to \"Long-Lived Access Tokens\"\n4. Create a new token and copy it\n\nNote: Token is only needed for remote access. Local network connections may work without it.</string>
+
+    <!-- Dashboard -->
+    <string name="dashboard_title">Dashboard</string>
+    <string name="dashboard_printers">Printers</string>
+    <string name="dashboard_view_all">View All</string>
+    <string name="dashboard_no_printers">No printers found</string>
+    <string name="dashboard_queue_status">Print Queue</string>
+
+    <!-- Printer List -->
+    <string name="printers_title">Printers</string>
+    <string name="printers_empty">No Printers Found</string>
+    <string name="printers_empty_hint">Make sure your printer is connected and configured in CUPS</string>
+    <string name="printers_set_default">Set as Default</string>
+    <string name="printers_model">Model</string>
+    <string name="printers_location">Location</string>
+    <string name="printers_formats">Formats</string>
+
+    <!-- Print Queue -->
+    <string name="queue_title">Print Queue</string>
+    <string name="queue_active">Printing</string>
+    <string name="queue_queued">Queued</string>
+    <string name="queue_completed">Completed</string>
+    <string name="queue_info">Pull down to refresh queue status. Print jobs are submitted from other apps using the Share menu or system print dialog.</string>
+    <string name="queue_no_jobs">No print jobs</string>
+    <string name="queue_cancel">Cancel</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_connection">Connection</string>
+    <string name="settings_server_url">Server URL</string>
+    <string name="settings_print_defaults">Print Defaults</string>
+    <string name="settings_default_copies">Default Copies</string>
+    <string name="settings_duplex">Double-sided Printing</string>
+    <string name="settings_quality">Print Quality</string>
+    <string name="settings_paper_size">Paper Size</string>
+    <string name="settings_notifications">Notifications</string>
+    <string name="settings_notifications_enabled">Job Notifications</string>
+    <string name="settings_account">Account</string>
+    <string name="settings_logout">Disconnect</string>
+    <string name="settings_logout_hint">Remove server connection and settings</string>
+    <string name="settings_logout_title">Disconnect?</string>
+    <string name="settings_logout_message">This will remove your server connection settings. You will need to set up the connection again.</string>
+    <string name="settings_logout_confirm">Disconnect</string>
+    <string name="settings_logout_cancel">Cancel</string>
+
+    <!-- Errors -->
+    <string name="error_connection_failed">Connection failed</string>
+    <string name="error_invalid_url">Invalid URL</string>
+    <string name="error_invalid_token">Invalid token</string>
+    <string name="error_network">Network error</string>
+    <string name="error_server">Server error</string>
+
+    <!-- Notifications -->
+    <string name="notification_channel_name">Print Jobs</string>
+    <string name="notification_channel_description">Notifications for print job status</string>
+    <string name="notification_job_started">Print job started</string>
+    <string name="notification_job_completed">Print job completed</string>
+    <string name="notification_job_failed">Print job failed</string>
+</resources>

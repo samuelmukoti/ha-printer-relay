@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RelayPrint REST API
+RelayPrint REST API & Web Dashboard
 
 This Flask API is accessed via Home Assistant's Ingress proxy, which handles:
 - Authentication (HA user sessions or long-lived access tokens)
@@ -9,16 +9,25 @@ This Flask API is accessed via Home Assistant's Ingress proxy, which handles:
 
 For external/mobile app access, use HA's long-lived access tokens.
 """
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, render_template, send_from_directory
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import os
 import logging
+import subprocess
+import socket
 from datetime import datetime, timezone
 from job_queue_manager import queue_manager
-from printer_discovery import get_printers
+from printer_discovery import get_printers, PrinterDiscovery
 
-app = Flask(__name__)
+# App configuration
+TEMPLATE_DIR = '/usr/local/share/relayprint/templates'
+STATIC_DIR = '/usr/local/share/relayprint/static'
+
+app = Flask(__name__,
+            template_folder=TEMPLATE_DIR,
+            static_folder=STATIC_DIR,
+            static_url_path='/static')
 CORS(app)
 
 # Configure logging
@@ -34,6 +43,19 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# ============================================================================
+# Web Dashboard Routes
+# ============================================================================
+
+@app.route('/')
+def dashboard():
+    """Serve the main dashboard UI."""
+    return render_template('index.html')
+
+# ============================================================================
+# Print Job API Endpoints
+# ============================================================================
 
 @app.route('/api/print', methods=['POST'])
 def submit_print_job():
@@ -108,14 +130,97 @@ def cancel_job(job_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# ============================================================================
+# Printer Management API Endpoints
+# ============================================================================
+
 @app.route('/api/printers', methods=['GET'])
 def list_printers():
-    """List all available printers."""
+    """List all available printers configured in CUPS."""
     try:
         printers = get_printers()
         return jsonify({'printers': printers})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/discover', methods=['GET'])
+def discover_printers():
+    """Discover network printers using mDNS/DNS-SD (Avahi)."""
+    try:
+        discovered = discover_network_printers()
+        return jsonify({'printers': discovered})
+    except Exception as e:
+        logger.error(f"Error discovering printers: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/printers/add', methods=['POST'])
+def add_printer():
+    """Add a new printer to CUPS."""
+    try:
+        data = request.get_json()
+        uri = data.get('uri')
+        name = data.get('name', 'NetworkPrinter')
+        location = data.get('location', '')
+
+        if not uri:
+            return jsonify({'error': 'Printer URI is required'}), 400
+
+        # Sanitize printer name (CUPS doesn't like spaces or special chars)
+        safe_name = ''.join(c if c.isalnum() or c in '-_' else '_' for c in name)
+
+        result = add_printer_to_cups(safe_name, uri, location)
+
+        if result['success']:
+            return jsonify({
+                'message': f'Printer {safe_name} added successfully',
+                'printer_name': safe_name
+            })
+        else:
+            return jsonify({'error': result['error']}), 500
+
+    except Exception as e:
+        logger.error(f"Error adding printer: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/printers/<printer_name>', methods=['DELETE'])
+def remove_printer(printer_name):
+    """Remove a printer from CUPS."""
+    try:
+        result = remove_printer_from_cups(printer_name)
+
+        if result['success']:
+            return jsonify({'message': f'Printer {printer_name} removed successfully'})
+        else:
+            return jsonify({'error': result['error']}), 500
+
+    except Exception as e:
+        logger.error(f"Error removing printer: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/printers/test', methods=['POST'])
+def test_print():
+    """Send a test page to a printer."""
+    try:
+        data = request.get_json()
+        printer_name = data.get('printer_name')
+
+        if not printer_name:
+            return jsonify({'error': 'Printer name is required'}), 400
+
+        result = send_test_page(printer_name)
+
+        if result['success']:
+            return jsonify({'message': 'Test page sent successfully', 'job_id': result.get('job_id')})
+        else:
+            return jsonify({'error': result['error']}), 500
+
+    except Exception as e:
+        logger.error(f"Error sending test page: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# ============================================================================
+# Queue Status API
+# ============================================================================
 
 @app.route('/api/queue/status', methods=['GET'])
 def get_queue_status():
@@ -126,16 +231,248 @@ def get_queue_status():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# ============================================================================
+# Health Check
+# ============================================================================
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """API health check endpoint."""
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now(timezone.utc).isoformat(),
-        'version': '0.1.1'
+        'version': '0.1.3'
     })
 
-# Error handlers
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
+def discover_network_printers():
+    """Discover printers on the network using avahi-browse."""
+    discovered = []
+
+    try:
+        # Use avahi-browse to find IPP printers
+        result = subprocess.run(
+            ['avahi-browse', '-t', '-r', '-p', '_ipp._tcp'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        # Parse avahi-browse output
+        current_printer = {}
+        for line in result.stdout.split('\n'):
+            if not line or line.startswith('+'):
+                continue
+
+            parts = line.split(';')
+            if len(parts) >= 8 and parts[0] == '=':
+                # Format: =;interface;protocol;name;type;domain;hostname;address;port;txt
+                name = parts[3]
+                hostname = parts[6]
+                address = parts[7]
+                port = parts[8] if len(parts) > 8 else '631'
+
+                # Build printer URI
+                uri = f"ipp://{address}:{port}/ipp/print"
+
+                # Skip if already in CUPS
+                existing_printers = get_printers()
+                existing_uris = [p.get('uri', '') for p in existing_printers]
+
+                if not any(address in u for u in existing_uris):
+                    discovered.append({
+                        'name': name,
+                        'hostname': hostname,
+                        'address': address,
+                        'port': port,
+                        'uri': uri,
+                        'make_model': 'Network Printer (IPP)'
+                    })
+
+        # Also try to find AirPrint printers
+        result_airprint = subprocess.run(
+            ['avahi-browse', '-t', '-r', '-p', '_ipps._tcp'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        for line in result_airprint.stdout.split('\n'):
+            if not line or line.startswith('+'):
+                continue
+
+            parts = line.split(';')
+            if len(parts) >= 8 and parts[0] == '=':
+                name = parts[3]
+                hostname = parts[6]
+                address = parts[7]
+                port = parts[8] if len(parts) > 8 else '631'
+
+                uri = f"ipps://{address}:{port}/ipp/print"
+
+                existing_printers = get_printers()
+                existing_uris = [p.get('uri', '') for p in existing_printers]
+
+                if not any(address in u for u in existing_uris):
+                    # Check if we already added this from IPP discovery
+                    if not any(d['address'] == address for d in discovered):
+                        discovered.append({
+                            'name': name,
+                            'hostname': hostname,
+                            'address': address,
+                            'port': port,
+                            'uri': uri,
+                            'make_model': 'AirPrint Printer (IPPS)'
+                        })
+
+    except subprocess.TimeoutExpired:
+        logger.warning("Printer discovery timed out")
+    except FileNotFoundError:
+        logger.warning("avahi-browse not available, trying alternative discovery")
+        # Fallback: try to use lpinfo
+        try:
+            result = subprocess.run(
+                ['lpinfo', '-v'],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            for line in result.stdout.split('\n'):
+                if 'network' in line and ('ipp://' in line or 'socket://' in line):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        uri = parts[1]
+                        discovered.append({
+                            'name': 'Network Printer',
+                            'uri': uri,
+                            'make_model': 'Discovered Printer'
+                        })
+        except Exception as e:
+            logger.error(f"Fallback discovery failed: {e}")
+    except Exception as e:
+        logger.error(f"Printer discovery error: {e}")
+
+    return discovered
+
+def add_printer_to_cups(name, uri, location=''):
+    """Add a printer to CUPS using lpadmin."""
+    try:
+        # First, try to find a suitable driver
+        # Use the generic IPP Everywhere driver for most network printers
+        driver = 'everywhere'
+
+        cmd = [
+            'lpadmin',
+            '-p', name,
+            '-v', uri,
+            '-m', driver,
+            '-L', location,
+            '-E'  # Enable the printer
+        ]
+
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+        if result.returncode != 0:
+            # Try with driverless if everywhere fails
+            cmd[5] = 'driverless:' + uri
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+        if result.returncode == 0:
+            # Enable and accept jobs
+            subprocess.run(['cupsenable', name], capture_output=True, timeout=10)
+            subprocess.run(['cupsaccept', name], capture_output=True, timeout=10)
+            return {'success': True}
+        else:
+            return {'success': False, 'error': result.stderr or 'Failed to add printer'}
+
+    except subprocess.TimeoutExpired:
+        return {'success': False, 'error': 'Operation timed out'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+def remove_printer_from_cups(name):
+    """Remove a printer from CUPS using lpadmin."""
+    try:
+        result = subprocess.run(
+            ['lpadmin', '-x', name],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        if result.returncode == 0:
+            return {'success': True}
+        else:
+            return {'success': False, 'error': result.stderr or 'Failed to remove printer'}
+
+    except subprocess.TimeoutExpired:
+        return {'success': False, 'error': 'Operation timed out'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+def send_test_page(printer_name):
+    """Send a test page to a printer."""
+    try:
+        # Create a simple test page
+        test_content = """
+========================================
+          RELAYPRINT TEST PAGE
+========================================
+
+Printer: {printer}
+Date: {date}
+
+If you can read this, your printer is
+configured correctly and ready to use
+with the RelayPrint mobile app.
+
+========================================
+        """.format(
+            printer=printer_name,
+            date=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        )
+
+        # Save test page
+        test_file = os.path.join(UPLOAD_FOLDER, 'test_page.txt')
+        with open(test_file, 'w') as f:
+            f.write(test_content)
+
+        # Print using lp command
+        result = subprocess.run(
+            ['lp', '-d', printer_name, test_file],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        # Clean up
+        os.unlink(test_file)
+
+        if result.returncode == 0:
+            # Extract job ID from output
+            job_id = None
+            if 'request id is' in result.stdout:
+                parts = result.stdout.split()
+                for i, p in enumerate(parts):
+                    if p == 'is':
+                        job_id = parts[i + 1].rstrip(')')
+                        break
+            return {'success': True, 'job_id': job_id}
+        else:
+            return {'success': False, 'error': result.stderr or 'Failed to print test page'}
+
+    except subprocess.TimeoutExpired:
+        return {'success': False, 'error': 'Operation timed out'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+# ============================================================================
+# Error Handlers
+# ============================================================================
+
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({'error': 'Not found'}), 404

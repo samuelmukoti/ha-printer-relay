@@ -43,3 +43,4 @@ htmlcov/
 
 # Local development
 *.log
+mobile/android/.gradle/

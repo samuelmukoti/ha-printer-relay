@@ -3,27 +3,32 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
-        android:name=".app.ReplayPrintApp"
+        android:name=".app.HARelayPrintApp"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.ReplayPrint">
+        android:theme="@style/Theme.HARelayPrint"
+        android:usesCleartextTraffic="true">
 
+        <!-- Main Activity -->
         <activity
             android:name=".app.MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:theme="@style/Theme.HARelayPrint">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
+        <!-- Print Service -->
         <service
-            android:name=".print.ReplayPrintService"
+            android:name=".print.HARelayPrintService"
             android:permission="android.permission.BIND_PRINT_SERVICE"
             android:exported="true">
             <intent-filter>
@@ -34,5 +39,11 @@
                 android:resource="@xml/printservice" />
         </service>
 
+        <!-- Settings Activity for Print Service -->
+        <activity
+            android:name=".ui.screens.settings.PrintServiceSettingsActivity"
+            android:exported="true"
+            android:label="@string/print_service_settings" />
+
     </application>
-</manifest> 
+</manifest>
