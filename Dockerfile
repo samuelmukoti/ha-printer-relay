@@ -40,5 +40,8 @@ RUN rm -rf /etc/services.d
 RUN find /etc/s6-overlay/s6-rc.d -type f -name run -exec chmod +x {} \; && \
     find /etc/cont-init.d -type f -exec chmod +x {} \;
 
+# Ensure /init is executable (from base image)
+RUN chmod +x /init
+
 # Expose CUPS port
 EXPOSE 631
