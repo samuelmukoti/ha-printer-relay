@@ -180,7 +180,9 @@ data class RemoteConfigResponse(
     @SerialName("tunnel_enabled") val tunnelEnabled: Boolean = false,
     @SerialName("tunnel_active") val tunnelActive: Boolean = false,
     @SerialName("tunnel_url") val tunnelUrl: String? = null,
-    @SerialName("tunnel_mode") val tunnelMode: String = "quick",  // "quick" or "named"
+    @SerialName("tunnel_provider") val tunnelProvider: String = "localtunnel",  // "localtunnel", "cloudflare_quick", "cloudflare_named"
+    @SerialName("tunnel_mode") val tunnelMode: String = "quick",  // Legacy field for backwards compatibility
+    @SerialName("providers") val providers: List<String> = emptyList(),  // Available providers
     @SerialName("direct_port") val directPort: Int = 7779,
     @SerialName("api_version") val apiVersion: String = ""
 )

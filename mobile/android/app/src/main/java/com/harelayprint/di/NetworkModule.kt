@@ -73,7 +73,9 @@ sealed class AddonDiscoveryResult {
         val ingressUrl: String,
         val addonSlug: String,
         val version: String,
-        val sessionToken: String? = null  // Ingress session token if used
+        val sessionToken: String? = null,  // Ingress session token if used
+        val tunnelUrl: String? = null,     // Remote tunnel URL if available
+        val tunnelProvider: String? = null // Tunnel provider (localtunnel, cloudflare_quick, etc.)
     ) : AddonDiscoveryResult()
     data class Error(val message: String, val code: Int? = null) : AddonDiscoveryResult()
 }
@@ -154,20 +156,22 @@ class ApiClientFactory(
             if (probeResult is ProbeResult.Success) {
                 Log.d(TAG, "Found RelayPrint at: $directUrl (version: ${probeResult.version})")
 
-                // Check if there's a Cloudflare Tunnel URL configured
-                val tunnelUrl = checkForTunnelUrl(directUrl, token)
-                if (tunnelUrl != null) {
-                    Log.d(TAG, "Cloudflare Tunnel URL found: $tunnelUrl")
+                // Check if there's a tunnel URL configured
+                val tunnelInfo = checkForTunnelUrl(directUrl, token)
+                if (tunnelInfo != null) {
+                    Log.d(TAG, "Tunnel URL found (${tunnelInfo.provider}): ${tunnelInfo.url}")
                     // Verify tunnel URL works
-                    val tunnelProbe = probeEndpoint(tunnelUrl, token)
+                    val tunnelProbe = probeEndpoint(tunnelInfo.url, token)
                     if (tunnelProbe is ProbeResult.Success) {
-                        Log.d(TAG, "Using Cloudflare Tunnel for remote access")
-                        cachedIngressUrl = tunnelUrl
+                        Log.d(TAG, "Using tunnel for remote access")
+                        cachedIngressUrl = tunnelInfo.url
                         cachedAddonSlug = "relay_print"
                         return AddonDiscoveryResult.Success(
-                            ingressUrl = tunnelUrl,
+                            ingressUrl = tunnelInfo.url,
                             addonSlug = "relay_print",
-                            version = tunnelProbe.version
+                            version = tunnelProbe.version,
+                            tunnelUrl = tunnelInfo.url,
+                            tunnelProvider = tunnelInfo.provider
                         )
                     }
                 }
@@ -202,9 +206,9 @@ class ApiClientFactory(
                     Log.d(TAG, "Found RelayPrint at local IP: $localUrl")
 
                     // Check for tunnel URL
-                    val tunnelUrl = checkForTunnelUrl(localUrl, token)
-                    if (tunnelUrl != null) {
-                        Log.d(TAG, "Cloudflare Tunnel URL found: $tunnelUrl - saving for remote access")
+                    val tunnelInfo = checkForTunnelUrl(localUrl, token)
+                    if (tunnelInfo != null) {
+                        Log.d(TAG, "Tunnel URL found (${tunnelInfo.provider}): ${tunnelInfo.url} - saving for remote access")
                         // Store tunnel URL but return local for now (faster)
                         // App can switch to tunnel when on mobile data
                         cachedIngressUrl = localUrl
@@ -213,7 +217,8 @@ class ApiClientFactory(
                             ingressUrl = localUrl,
                             addonSlug = "relay_print",
                             version = probeResult.version,
-                            sessionToken = tunnelUrl  // Store tunnel URL in sessionToken field for now
+                            tunnelUrl = tunnelInfo.url,
+                            tunnelProvider = tunnelInfo.provider
                         )
                     }
 
@@ -251,10 +256,18 @@ class ApiClientFactory(
     }
 
     /**
-     * Check if the addon has a Cloudflare Tunnel URL configured.
-     * Returns the tunnel URL if tunnel is enabled AND active.
+     * Result of tunnel URL check.
      */
-    private suspend fun checkForTunnelUrl(baseUrl: String, token: String): String? {
+    data class TunnelInfo(
+        val url: String,
+        val provider: String
+    )
+
+    /**
+     * Check if the addon has a tunnel URL configured.
+     * Returns the tunnel URL and provider if tunnel is enabled AND active.
+     */
+    private suspend fun checkForTunnelUrl(baseUrl: String, token: String): TunnelInfo? {
         return try {
             val configUrl = normalizeUrl(baseUrl) + "api/config/remote"
             Log.d(TAG, "Checking for tunnel URL at: $configUrl")
@@ -272,8 +285,8 @@ class ApiClientFactory(
                         val remoteConfig = json.decodeFromString<com.harelayprint.data.api.RemoteConfigResponse>(body)
                         // Check both enabled AND active (tunnel process is running)
                         if (remoteConfig.tunnelActive && !remoteConfig.tunnelUrl.isNullOrEmpty()) {
-                            Log.d(TAG, "Tunnel active (mode: ${remoteConfig.tunnelMode}): ${remoteConfig.tunnelUrl}")
-                            remoteConfig.tunnelUrl
+                            Log.d(TAG, "Tunnel active (provider: ${remoteConfig.tunnelProvider}): ${remoteConfig.tunnelUrl}")
+                            TunnelInfo(remoteConfig.tunnelUrl, remoteConfig.tunnelProvider)
                         } else if (remoteConfig.tunnelEnabled && remoteConfig.tunnelUrl.isNullOrEmpty()) {
                             Log.d(TAG, "Tunnel enabled but URL not yet available (starting?)")
                             null

@@ -26,6 +26,8 @@ class SettingsDataStore @Inject constructor(
         val INGRESS_URL = stringPreferencesKey("ingress_url")
         val INGRESS_SESSION_TOKEN = stringPreferencesKey("ingress_session_token")  // HA ingress session token
         val ADDON_SLUG = stringPreferencesKey("addon_slug")  // Discovered addon slug
+        val TUNNEL_URL = stringPreferencesKey("tunnel_url")  // Remote tunnel URL (LocalTunnel/Cloudflare)
+        val TUNNEL_PROVIDER = stringPreferencesKey("tunnel_provider")  // "localtunnel", "cloudflare_quick", "cloudflare_named"
         val IS_CONFIGURED = booleanPreferencesKey("is_configured")
         val AUTH_TYPE = stringPreferencesKey("auth_type") // "oauth" or "long_lived"
         val DEFAULT_PRINTER = stringPreferencesKey("default_printer")
@@ -43,6 +45,8 @@ class SettingsDataStore @Inject constructor(
     val ingressUrl: Flow<String> = context.dataStore.data.map { it[Keys.INGRESS_URL] ?: "" }
     val ingressSessionToken: Flow<String> = context.dataStore.data.map { it[Keys.INGRESS_SESSION_TOKEN] ?: "" }
     val addonSlug: Flow<String> = context.dataStore.data.map { it[Keys.ADDON_SLUG] ?: "" }
+    val tunnelUrl: Flow<String> = context.dataStore.data.map { it[Keys.TUNNEL_URL] ?: "" }
+    val tunnelProvider: Flow<String> = context.dataStore.data.map { it[Keys.TUNNEL_PROVIDER] ?: "" }
     val isConfigured: Flow<Boolean> = context.dataStore.data.map { it[Keys.IS_CONFIGURED] ?: false }
     val authType: Flow<String> = context.dataStore.data.map { it[Keys.AUTH_TYPE] ?: "oauth" }
     val defaultPrinter: Flow<String?> = context.dataStore.data.map { it[Keys.DEFAULT_PRINTER] }
@@ -133,6 +137,26 @@ class SettingsDataStore @Inject constructor(
             if (addonSlug != null) {
                 prefs[Keys.ADDON_SLUG] = addonSlug
             }
+        }
+    }
+
+    /**
+     * Save the tunnel URL for remote access.
+     */
+    suspend fun saveTunnelUrl(tunnelUrl: String, provider: String = "localtunnel") {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.TUNNEL_URL] = tunnelUrl
+            prefs[Keys.TUNNEL_PROVIDER] = provider
+        }
+    }
+
+    /**
+     * Clear the tunnel URL (when tunnel is disabled or URL changes).
+     */
+    suspend fun clearTunnelUrl() {
+        context.dataStore.edit { prefs ->
+            prefs.remove(Keys.TUNNEL_URL)
+            prefs.remove(Keys.TUNNEL_PROVIDER)
         }
     }
 

@@ -160,6 +160,15 @@ class SetupViewModel @Inject constructor(
                     sessionToken = discoveryResult.sessionToken,
                     addonSlug = discoveryResult.addonSlug
                 )
+
+                // Save tunnel URL if available (for remote access)
+                if (!discoveryResult.tunnelUrl.isNullOrEmpty()) {
+                    settings.saveTunnelUrl(
+                        tunnelUrl = discoveryResult.tunnelUrl,
+                        provider = discoveryResult.tunnelProvider ?: "localtunnel"
+                    )
+                }
+
                 settings.setConfigured(true)
 
                 _uiState.value = _uiState.value.copy(
