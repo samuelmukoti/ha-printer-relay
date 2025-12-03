@@ -252,6 +252,7 @@ class ApiClientFactory(
 
     /**
      * Check if the addon has a Cloudflare Tunnel URL configured.
+     * Returns the tunnel URL if tunnel is enabled AND active.
      */
     private suspend fun checkForTunnelUrl(baseUrl: String, token: String): String? {
         return try {
@@ -269,9 +270,15 @@ class ApiClientFactory(
                     val body = response.body?.string()
                     if (body != null && body.contains("tunnel_url")) {
                         val remoteConfig = json.decodeFromString<com.harelayprint.data.api.RemoteConfigResponse>(body)
-                        if (remoteConfig.tunnelEnabled && !remoteConfig.tunnelUrl.isNullOrEmpty()) {
+                        // Check both enabled AND active (tunnel process is running)
+                        if (remoteConfig.tunnelActive && !remoteConfig.tunnelUrl.isNullOrEmpty()) {
+                            Log.d(TAG, "Tunnel active (mode: ${remoteConfig.tunnelMode}): ${remoteConfig.tunnelUrl}")
                             remoteConfig.tunnelUrl
+                        } else if (remoteConfig.tunnelEnabled && remoteConfig.tunnelUrl.isNullOrEmpty()) {
+                            Log.d(TAG, "Tunnel enabled but URL not yet available (starting?)")
+                            null
                         } else {
+                            Log.d(TAG, "Tunnel not active or not configured")
                             null
                         }
                     } else {
