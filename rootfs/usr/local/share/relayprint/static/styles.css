@@ -1033,6 +1033,339 @@ body {
   padding-right: 36px;
 }
 
+/* Settings Tab Styles */
+.settings-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px 20px;
+  border-radius: var(--border-radius-sm);
+  margin-bottom: 24px;
+}
+
+.settings-banner.info {
+  background: rgba(33, 150, 243, 0.1);
+  border: 1px solid rgba(33, 150, 243, 0.3);
+}
+
+.settings-banner.success {
+  background: rgba(76, 175, 80, 0.1);
+  border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+.settings-banner.warning {
+  background: rgba(255, 152, 0, 0.1);
+  border: 1px solid rgba(255, 152, 0, 0.3);
+}
+
+.banner-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+}
+
+.settings-banner.info .banner-icon svg {
+  fill: var(--info-color);
+}
+
+.settings-banner.success .banner-icon svg {
+  fill: var(--success-color);
+}
+
+.settings-banner.warning .banner-icon svg {
+  fill: var(--warning-color);
+}
+
+.banner-content {
+  flex: 1;
+}
+
+.banner-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.banner-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.banner-text strong {
+  color: var(--primary-color);
+  font-family: 'Roboto Mono', monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+/* Settings Section */
+.settings-section {
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--divider-color);
+}
+
+.settings-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.settings-section h3 {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding: 8px 0;
+  margin-bottom: 8px;
+}
+
+.section-header:hover h3 {
+  color: var(--primary-color);
+}
+
+.expand-chevron {
+  width: 24px;
+  height: 24px;
+  fill: var(--text-secondary);
+  transition: transform var(--transition-fast);
+}
+
+.section-content {
+  display: none;
+  animation: fadeIn 0.2s ease;
+}
+
+/* Setup Steps */
+.setup-steps {
+  list-style: none;
+  counter-reset: step;
+}
+
+.setup-steps li {
+  position: relative;
+  padding: 12px 0 12px 48px;
+  border-bottom: 1px solid var(--bg-hover);
+  line-height: 1.6;
+}
+
+.setup-steps li:last-child {
+  border-bottom: none;
+}
+
+.setup-steps li::before {
+  counter-increment: step;
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 12px;
+  width: 28px;
+  height: 28px;
+  background: var(--primary-color);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.setup-steps li strong {
+  color: var(--text-primary);
+}
+
+.setup-steps li a {
+  color: var(--primary-color);
+  text-decoration: none;
+}
+
+.setup-steps li a:hover {
+  text-decoration: underline;
+}
+
+.setup-steps li ul {
+  margin-top: 8px;
+  margin-left: 0;
+  list-style: none;
+}
+
+.setup-steps li ul li {
+  padding: 4px 0 4px 20px;
+  border-bottom: none;
+}
+
+.setup-steps li ul li::before {
+  content: '→';
+  background: none;
+  color: var(--text-secondary);
+  width: auto;
+  height: auto;
+  font-size: 14px;
+  top: 4px;
+}
+
+.setup-steps code {
+  background: var(--bg-secondary);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--primary-light);
+}
+
+/* Form Enhancements */
+.form-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.form-hint {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-disabled);
+  margin-top: 2px;
+}
+
+.input-with-action {
+  display: flex;
+  gap: 8px;
+}
+
+.input-with-action .form-input {
+  flex: 1;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 52px;
+  height: 28px;
+  cursor: pointer;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-hover);
+  border-radius: 28px;
+  transition: all var(--transition-fast);
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  left: 3px;
+  bottom: 3px;
+  background: var(--text-secondary);
+  border-radius: 50%;
+  transition: all var(--transition-fast);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: var(--primary-color);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(24px);
+  background: white;
+}
+
+/* Form Actions */
+.form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+/* Tunnel Status Badge in Settings */
+.tunnel-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: var(--bg-secondary);
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-dot.active {
+  background: var(--success-color);
+  box-shadow: 0 0 8px rgba(76, 175, 80, 0.6);
+}
+
+.status-dot.inactive {
+  background: var(--text-disabled);
+}
+
+/* About Section */
+.about-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.about-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--bg-hover);
+}
+
+.about-row:last-child {
+  border-bottom: none;
+}
+
+.about-label {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.about-value {
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.about-value a {
+  color: var(--primary-color);
+  text-decoration: none;
+}
+
+.about-value a:hover {
+  text-decoration: underline;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .app-container {
@@ -1043,6 +1376,16 @@ body {
     flex-direction: column;
     align-items: flex-start;
     gap: 16px;
+  }
+
+  .app-title {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .tunnel-status {
+    margin-left: 0;
+    margin-top: 8px;
   }
 
   .status-grid {
@@ -1062,5 +1405,48 @@ body {
     margin-left: 0;
     margin-top: 12px;
     justify-content: flex-end;
+  }
+
+  /* Settings responsive */
+  .nav-tabs {
+    flex-wrap: wrap;
+  }
+
+  .nav-tab {
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+
+  .settings-banner {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .form-actions .btn {
+    width: 100%;
+  }
+
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .tunnel-status-badge {
+    align-self: flex-start;
+  }
+
+  .setup-steps li {
+    padding-left: 40px;
+  }
+
+  .setup-steps li::before {
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
   }
 }

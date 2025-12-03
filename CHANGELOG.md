@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.21a] - 2025-12-03
+
+### Fixed
+- **Cloudflare Tunnel configuration persistence** - Configuration now saved to dedicated config file
+- **Dashboard tunnel settings** - Added UI for configuring tunnel token and URL from dashboard
+- **POST /api/config/remote endpoint** - Save tunnel configuration from dashboard UI
+
 ## [0.1.21] - 2025-12-03
 
 ### Added

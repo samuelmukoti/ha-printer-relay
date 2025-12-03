@@ -317,8 +317,48 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now(timezone.utc).isoformat(),
-        'version': '0.1.21'
+        'version': '0.1.21a'
     })
+
+CLOUDFLARE_CONFIG_FILE = '/data/cloudflare_config.json'
+
+def load_cloudflare_config():
+    """Load Cloudflare config from dashboard config file or addon options."""
+    config = {
+        'enabled': False,
+        'tunnel_token': '',
+        'tunnel_url': ''
+    }
+    
+    # First check dashboard config file (takes precedence)
+    if os.path.exists(CLOUDFLARE_CONFIG_FILE):
+        try:
+            import json
+            with open(CLOUDFLARE_CONFIG_FILE, 'r') as f:
+                dashboard_config = json.load(f)
+                config['enabled'] = dashboard_config.get('enabled', False)
+                config['tunnel_token'] = dashboard_config.get('tunnel_token', '')
+                config['tunnel_url'] = dashboard_config.get('tunnel_url', '')
+                return config
+        except Exception as e:
+            logger.warning(f"Failed to read dashboard config: {e}")
+    
+    # Fallback to addon options
+    options_file = '/data/options.json'
+    if os.path.exists(options_file):
+        try:
+            import json
+            with open(options_file, 'r') as f:
+                options = json.load(f)
+                cloudflare = options.get('cloudflare', {})
+                config['enabled'] = cloudflare.get('enabled', False)
+                config['tunnel_token'] = cloudflare.get('tunnel_token', '')
+                config['tunnel_url'] = cloudflare.get('tunnel_url', '')
+        except Exception as e:
+            logger.warning(f"Failed to read addon options: {e}")
+    
+    return config
+
 
 @app.route('/api/config/remote', methods=['GET'])
 def get_remote_config():
@@ -328,28 +368,76 @@ def get_remote_config():
     to allow mobile apps to discover the tunnel URL.
     Returns the Cloudflare Tunnel URL if configured.
     """
-    tunnel_url = None
-    tunnel_enabled = False
-
-    # Try to read from addon options
-    options_file = '/data/options.json'
-    if os.path.exists(options_file):
-        try:
-            import json
-            with open(options_file, 'r') as f:
-                options = json.load(f)
-                cloudflare = options.get('cloudflare', {})
-                tunnel_enabled = cloudflare.get('enabled', False)
-                tunnel_url = cloudflare.get('tunnel_url', '')
-        except Exception as e:
-            logger.warning(f"Failed to read options: {e}")
+    config = load_cloudflare_config()
 
     return jsonify({
-        'tunnel_enabled': tunnel_enabled,
-        'tunnel_url': tunnel_url if tunnel_url else None,
+        'tunnel_enabled': config['enabled'],
+        'tunnel_url': config['tunnel_url'] if config['tunnel_url'] else None,
         'direct_port': 7779,
-        'api_version': '0.1.21'
+        'api_version': '0.1.21a'
     })
+
+
+@app.route('/api/config/remote', methods=['POST'])
+@require_auth
+def save_remote_config():
+    """Save remote access configuration.
+    
+    This saves to a dashboard-specific config file that the
+    cloudflared service will read on startup.
+    """
+    try:
+        data = request.get_json()
+        
+        # Load existing config
+        config = load_cloudflare_config()
+        
+        # Update with new values
+        if 'enabled' in data:
+            config['enabled'] = bool(data['enabled'])
+        if 'tunnel_url' in data:
+            config['tunnel_url'] = data['tunnel_url'].strip() if data['tunnel_url'] else ''
+        if 'tunnel_token' in data and data['tunnel_token']:
+            # Only update token if a new one is provided (not empty)
+            config['tunnel_token'] = data['tunnel_token'].strip()
+        
+        # Save to config file
+        import json
+        with open(CLOUDFLARE_CONFIG_FILE, 'w') as f:
+            json.dump(config, f, indent=2)
+        
+        # Update the tunnel enabled marker
+        tunnel_config_dir = '/data/cloudflare'
+        os.makedirs(tunnel_config_dir, exist_ok=True)
+        
+        if config['enabled'] and config['tunnel_token']:
+            # Write token for the service
+            with open(os.path.join(tunnel_config_dir, 'tunnel_token'), 'w') as f:
+                f.write(config['tunnel_token'])
+            os.chmod(os.path.join(tunnel_config_dir, 'tunnel_token'), 0o600)
+            
+            # Create enabled marker
+            with open(os.path.join(tunnel_config_dir, 'enabled'), 'w') as f:
+                f.write('1')
+            
+            logger.info("Cloudflare Tunnel configuration saved and enabled")
+        else:
+            # Remove enabled marker
+            enabled_file = os.path.join(tunnel_config_dir, 'enabled')
+            if os.path.exists(enabled_file):
+                os.remove(enabled_file)
+            logger.info("Cloudflare Tunnel disabled")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Configuration saved. Restart the addon to apply tunnel changes.',
+            'tunnel_enabled': config['enabled'],
+            'tunnel_url': config['tunnel_url']
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to save config: {e}")
+        return jsonify({'error': str(e)}), 500
 
 # ============================================================================
 # Helper Functions
