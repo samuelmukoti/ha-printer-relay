@@ -33,6 +33,12 @@ RUN mkdir -p /etc/cups.default && \
 # Copy rootfs
 COPY rootfs/ /
 
-# Set permissions exactly like EverythingSmartHome addon
-RUN rm -rf /etc/services.d/relayprint && \
-    chmod +x /etc/s6-overlay/s6-rc.d/relayprint/run
+# Remove legacy s6-overlay v2 services.d directory
+RUN rm -rf /etc/services.d
+
+# Set permissions for s6-overlay v3 run scripts and cont-init.d scripts
+RUN find /etc/s6-overlay/s6-rc.d -type f -name run -exec chmod +x {} \; && \
+    find /etc/cont-init.d -type f -exec chmod +x {} \;
+
+# Expose CUPS port
+EXPOSE 631

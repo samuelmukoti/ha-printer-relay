@@ -1,0 +1,4 @@
+#!/command/execlineb -P
+with-contenv
+s6-setuidgid root
+exec dbus-daemon --system --nofork
