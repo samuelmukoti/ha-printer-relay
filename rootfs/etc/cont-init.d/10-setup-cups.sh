@@ -80,64 +80,64 @@ esac
 [[ "${MAX_JOBS}" =~ ^[0-9]+$ ]] || MAX_JOBS="100"
 [[ -z "${CUPS_ADMIN_USER}" ]] && CUPS_ADMIN_USER="admin"
 
-{
-    echo "LogLevel ${LOG_LEVEL}"
-    echo "MaxLogSize 0"
-    echo "PreserveJobHistory Yes"
-    echo "PreserveJobFiles No"
-    echo "MaxJobs ${MAX_JOBS}"
-    echo "MaxJobTime 0"
-    echo "Port 631"
-    echo "Listen /run/cups/cups.sock"
-    echo "Browsing On"
-    echo "BrowseLocalProtocols dnssd"
-    echo "DefaultAuthType Basic"
-    echo "WebInterface Yes"
-    echo "SystemGroup lpadmin root sys"
-    echo ""
-    echo "<Location />"
-    echo "  Order allow,deny"
-    echo "  Allow @LOCAL"
-    echo "</Location>"
-    echo ""
-    echo "<Location /admin>"
-    echo "  Order allow,deny"
-    echo "  Allow @LOCAL"
-    echo "</Location>"
-    echo ""
-    echo "<Location /admin/conf>"
-    echo "  AuthType Default"
-    echo "  Require user @SYSTEM ${CUPS_ADMIN_USER}"
-    echo "  Order allow,deny"
-    echo "  Allow @LOCAL"
-    echo "</Location>"
-    echo ""
-    echo "<Policy default>"
-    echo "  JobPrivateAccess default"
-    echo "  JobPrivateValues default"
-    echo "  SubscriptionPrivateAccess default"
-    echo "  SubscriptionPrivateValues default"
-    echo "  <Limit Create-Job Print-Job Print-URI Validate-Job>"
-    echo "    Order deny,allow"
-    echo "  </Limit>"
-    echo "  <Limit Send-Document Send-URI Hold-Job Release-Job Restart-Job Purge-Jobs Set-Job-Attributes Create-Job-Subscription Renew-Subscription Cancel-Subscription Get-Notifications Reprocess-Job Cancel-Current-Job Suspend-Current-Job Resume-Job Cancel-My-Jobs Close-Job CUPS-Move-Job CUPS-Get-Document>"
-    echo "    Require user @OWNER @SYSTEM"
-    echo "    Order deny,allow"
-    echo "  </Limit>"
-    echo "  <Limit Cancel-Job Cancel-Jobs>"
-    echo "    Require user @OWNER @SYSTEM"
-    echo "    Order deny,allow"
-    echo "  </Limit>"
-    echo "  <Limit CUPS-Add-Modify-Printer CUPS-Delete-Printer CUPS-Add-Modify-Class CUPS-Delete-Class CUPS-Set-Default CUPS-Get-Devices>"
-    echo "    AuthType None"
-    echo "    Order allow,deny"
-    echo "    Allow all"
-    echo "  </Limit>"
-    echo "  <Limit All>"
-    echo "    Order deny,allow"
-    echo "  </Limit>"
-    echo "</Policy>"
-} > /data/cups/cupsd.conf
+# Generate a permissive cupsd.conf for container use
+# Authentication is handled by Home Assistant Ingress, so we allow local operations
+cat > /data/cups/cupsd.conf << CUPSCONF
+# Log settings
+LogLevel ${LOG_LEVEL}
+MaxLogSize 0
+ErrorPolicy retry-job
+
+# Job settings
+PreserveJobHistory Yes
+PreserveJobFiles No
+MaxJobs ${MAX_JOBS}
+MaxJobTime 0
+
+# Network settings - listen on all interfaces
+Port 631
+Listen /run/cups/cups.sock
+
+# Browsing/Discovery
+Browsing On
+BrowseLocalProtocols dnssd
+
+# Security - permissive for container use (HA Ingress handles auth)
+# Root and lpadmin group members can administer
+SystemGroup root lpadmin wheel sys
+
+# Allow all local access - container is already protected by HA auth
+<Location />
+  Order allow,deny
+  Allow all
+</Location>
+
+<Location /admin>
+  Order allow,deny
+  Allow all
+</Location>
+
+<Location /admin/conf>
+  Order allow,deny
+  Allow all
+</Location>
+
+# Permissive policy - no authentication required for any operations
+# This is safe because the container is isolated and protected by HA Ingress
+<Policy default>
+  JobPrivateAccess default
+  JobPrivateValues default
+  SubscriptionPrivateAccess default
+  SubscriptionPrivateValues default
+
+  <Limit All>
+    Order allow,deny
+    Allow all
+  </Limit>
+</Policy>
+CUPSCONF
+
+bashio::log.info "Generated permissive CUPS configuration for container use"
 
 # Ensure directories exist for dbus, avahi, and cups
 mkdir -p /run/dbus /run/avahi-daemon /run/cups
