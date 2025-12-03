@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Now reads `tunnel.enabled`, `tunnel.provider`, `tunnel.tunnel_token` instead of `cloudflare.*`
   - Properly stores provider selection for s6 tunnel service to use
   - Synced config.json with config.yaml tunnel schema
+- **Tunnel config persistence** - Added tunnel directory creation in app-dirs init script
+  - Added migration from old `cloudflare_config.json` to new `tunnel_config.json`
+  - Added debug logging for tunnel config loading
 
 ## [0.1.21e] - 2025-12-03
 

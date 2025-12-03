@@ -352,8 +352,11 @@ def load_tunnel_config():
                 config['provider'] = dashboard_config.get('provider', 'localtunnel')
                 config['tunnel_token'] = dashboard_config.get('tunnel_token', '')
                 config['tunnel_url'] = dashboard_config.get('tunnel_url', '')
+                logger.debug(f"Loaded tunnel config from {TUNNEL_CONFIG_FILE}: enabled={config['enabled']}, provider={config['provider']}")
         except Exception as e:
             logger.warning(f"Failed to read dashboard config: {e}")
+    else:
+        logger.debug(f"No dashboard config file found at {TUNNEL_CONFIG_FILE}")
 
     # Fallback to addon options
     if not config['enabled']:
@@ -414,7 +417,7 @@ def get_remote_config():
         'tunnel_provider': config['provider'],
         'providers': TUNNEL_PROVIDERS,
         'direct_port': 7779,
-        'api_version': '0.1.21e'
+        'api_version': '0.1.21f'
     })
 
 
