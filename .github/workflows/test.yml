@@ -18,6 +18,11 @@ jobs:
       with:
         python-version: '3.11'
 
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libcups2-dev
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -72,6 +77,8 @@ jobs:
         context: .
         platforms: linux/${{ matrix.arch }}
         push: ${{ github.event_name != 'pull_request' }}
+        build-args: |
+          BUILD_FROM=ghcr.io/home-assistant/${{ matrix.arch }}-base:3.18
         tags: |
           ghcr.io/${{ github.repository }}/relay-print-${{ matrix.arch }}:latest
           ghcr.io/${{ github.repository }}/relay-print-${{ matrix.arch }}:${{ github.sha }}
