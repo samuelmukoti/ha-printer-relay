@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.21d] - 2025-12-03
+
+### Fixed
+- **Cloudflared crash loop** - Fixed rapid restart loop when Quick Tunnel fails to connect
+  - Added 30-second backoff delay between restart attempts
+  - Improved output capture using tee instead of pipe-to-while-read
+  - Background URL capture thread with log file parsing
+- **Tunnel URL capture** - Fixed URL not being captured from cloudflared output
+
 ## [0.1.21c] - 2025-12-03
 
 ### Added

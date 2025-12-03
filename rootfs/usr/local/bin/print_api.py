@@ -325,7 +325,7 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now(timezone.utc).isoformat(),
-        'version': '0.1.21c'
+        'version': '0.1.21d'
     })
 
 CLOUDFLARE_CONFIG_FILE = '/data/cloudflare_config.json'
