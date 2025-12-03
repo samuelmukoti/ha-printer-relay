@@ -41,6 +41,9 @@ RUN rm -rf /etc/services.d
 RUN mkdir -p /etc/cups.default && \
     cp /etc/cups/cupsd.conf /etc/cups.default/
 
+# Ensure s6-overlay init has execute permissions
+RUN chmod +x /init 2>/dev/null || true
+
 # Make s6-overlay v3 service scripts executable
 RUN chmod +x /etc/s6-overlay/s6-rc.d/*/run
 
