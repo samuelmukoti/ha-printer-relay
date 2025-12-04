@@ -25,6 +25,7 @@ class SettingsDataStore @Inject constructor(
         val TOKEN_EXPIRY = longPreferencesKey("token_expiry")
         val INGRESS_URL = stringPreferencesKey("ingress_url")
         val INGRESS_SESSION_TOKEN = stringPreferencesKey("ingress_session_token")  // HA ingress session token
+        val HA_COOKIES = stringPreferencesKey("ha_cookies")  // WebView cookies for HA session
         val ADDON_SLUG = stringPreferencesKey("addon_slug")  // Discovered addon slug
         val TUNNEL_URL = stringPreferencesKey("tunnel_url")  // Remote tunnel URL (LocalTunnel/Cloudflare)
         val TUNNEL_PROVIDER = stringPreferencesKey("tunnel_provider")  // "localtunnel", "cloudflare_quick", "cloudflare_named"
@@ -44,6 +45,7 @@ class SettingsDataStore @Inject constructor(
     val tokenExpiry: Flow<Long> = context.dataStore.data.map { it[Keys.TOKEN_EXPIRY] ?: 0L }
     val ingressUrl: Flow<String> = context.dataStore.data.map { it[Keys.INGRESS_URL] ?: "" }
     val ingressSessionToken: Flow<String> = context.dataStore.data.map { it[Keys.INGRESS_SESSION_TOKEN] ?: "" }
+    val haCookies: Flow<String> = context.dataStore.data.map { it[Keys.HA_COOKIES] ?: "" }
     val addonSlug: Flow<String> = context.dataStore.data.map { it[Keys.ADDON_SLUG] ?: "" }
     val tunnelUrl: Flow<String> = context.dataStore.data.map { it[Keys.TUNNEL_URL] ?: "" }
     val tunnelProvider: Flow<String> = context.dataStore.data.map { it[Keys.TUNNEL_PROVIDER] ?: "" }
@@ -189,6 +191,15 @@ class SettingsDataStore @Inject constructor(
     }
 
     /**
+     * Save cookies from WebView for HA session access.
+     */
+    suspend fun saveCookies(cookies: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.HA_COOKIES] = cookies
+        }
+    }
+
+    /**
      * Clear authentication data (logout).
      */
     suspend fun clearAuth() {
@@ -198,6 +209,7 @@ class SettingsDataStore @Inject constructor(
             prefs.remove(Keys.TOKEN_EXPIRY)
             prefs.remove(Keys.INGRESS_URL)
             prefs.remove(Keys.INGRESS_SESSION_TOKEN)
+            prefs.remove(Keys.HA_COOKIES)
             prefs.remove(Keys.ADDON_SLUG)
             prefs[Keys.IS_CONFIGURED] = false
         }

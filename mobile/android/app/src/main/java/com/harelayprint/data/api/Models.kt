@@ -184,5 +184,6 @@ data class RemoteConfigResponse(
     @SerialName("tunnel_mode") val tunnelMode: String = "quick",  // Legacy field for backwards compatibility
     @SerialName("providers") val providers: List<String> = emptyList(),  // Available providers
     @SerialName("direct_port") val directPort: Int = 7779,
-    @SerialName("api_version") val apiVersion: String = ""
+    @SerialName("api_version") val apiVersion: String = "",
+    @SerialName("version") val version: String? = null  // Server version
 )

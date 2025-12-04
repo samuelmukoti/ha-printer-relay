@@ -24,17 +24,33 @@ class PrintRepository @Inject constructor(
 ) {
     /**
      * Get the API client using saved configuration.
-     * Uses the discovered ingress URL, falling back to base HA URL if not available.
+     *
+     * Connection Priority:
+     * 1. **Ingress** - Direct access through HA ingress (preferred, no tunnel needed)
+     * 2. **Tunnel** - Fallback to LocalTunnel/Cloudflare if ingress not configured
      */
     private suspend fun getApi(): RelayPrintApi {
         val ingressUrl = settings.ingressUrl.first()
+        val addonSlug = settings.addonSlug.first()
+        val tunnelUrl = settings.tunnelUrl.first()
         val haUrl = settings.haUrl.first()
         val token = settings.haToken.first()
 
-        // Use the saved ingress URL (discovered addon path) if available
-        val effectiveUrl = ingressUrl.ifEmpty { haUrl }
-
-        return apiFactory.createApiWithIngress(haUrl, effectiveUrl, token)
+        // Prefer ingress access (uses ingress session automatically)
+        return when {
+            ingressUrl.isNotEmpty() && addonSlug.isNotEmpty() -> {
+                // Use ingress - session is managed by ApiClientFactory
+                apiFactory.createApiForIngress(haUrl, addonSlug, token)
+            }
+            tunnelUrl.isNotEmpty() -> {
+                // Fallback to tunnel
+                apiFactory.createApiForTunnel(tunnelUrl, token)
+            }
+            else -> {
+                // Last resort - try ingress URL directly
+                apiFactory.createApi(ingressUrl.ifEmpty { haUrl }, token)
+            }
+        }
     }
 
     suspend fun testConnection(url: String, token: String): ApiResult<HealthResponse> {

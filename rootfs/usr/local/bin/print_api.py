@@ -355,7 +355,7 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now(timezone.utc).isoformat(),
-        'version': '0.1.21e'
+        'version': '0.1.22'
     })
 
 TUNNEL_CONFIG_FILE = '/data/tunnel_config.json'
@@ -381,7 +381,7 @@ def load_tunnel_config():
                 config['enabled'] = dashboard_config.get('enabled', False)
                 config['provider'] = dashboard_config.get('provider', 'localtunnel')
                 config['tunnel_token'] = dashboard_config.get('tunnel_token', '')
-                config['tunnel_url'] = dashboard_config.get('tunnel_url', '')
+                # Don't load tunnel_url from JSON - prefer the dynamic file
                 logger.debug(f"Loaded tunnel config from {TUNNEL_CONFIG_FILE}: enabled={config['enabled']}, provider={config['provider']}")
         except Exception as e:
             logger.warning(f"Failed to read dashboard config: {e}")
@@ -399,20 +399,23 @@ def load_tunnel_config():
                     config['enabled'] = tunnel.get('enabled', False)
                     config['provider'] = tunnel.get('provider', 'localtunnel')
                     config['tunnel_token'] = tunnel.get('tunnel_token', '')
-                    config['tunnel_url'] = tunnel.get('tunnel_url', '')
+                    # Don't load tunnel_url from options - prefer the dynamic file
             except Exception as e:
                 logger.warning(f"Failed to read addon options: {e}")
 
-    # Read the dynamically generated URL from tunnel service
-    if config['enabled']:
-        if os.path.exists(TUNNEL_URL_FILE):
-            try:
-                with open(TUNNEL_URL_FILE, 'r') as f:
-                    dynamic_url = f.read().strip()
-                    if dynamic_url:
-                        config['tunnel_url'] = dynamic_url
-            except Exception as e:
-                logger.warning(f"Failed to read tunnel URL file: {e}")
+    # ALWAYS read the dynamically generated URL from tunnel service
+    # This is the authoritative source - the tunnel service writes here when URL is available
+    if os.path.exists(TUNNEL_URL_FILE):
+        try:
+            with open(TUNNEL_URL_FILE, 'r') as f:
+                dynamic_url = f.read().strip()
+                if dynamic_url:
+                    config['tunnel_url'] = dynamic_url
+                    # If we have a dynamic URL, tunnel is definitely enabled and active
+                    config['enabled'] = True
+                    logger.debug(f"Read dynamic tunnel URL from {TUNNEL_URL_FILE}: {dynamic_url}")
+        except Exception as e:
+            logger.warning(f"Failed to read tunnel URL file: {e}")
 
     return config
 
@@ -447,7 +450,8 @@ def get_remote_config():
         'tunnel_provider': config['provider'],
         'providers': TUNNEL_PROVIDERS,
         'direct_port': 7779,
-        'api_version': '0.1.21h'
+        'api_version': '0.1.22',
+        'version': '0.1.22'  # Server version for mobile app compatibility
     })
 
 
